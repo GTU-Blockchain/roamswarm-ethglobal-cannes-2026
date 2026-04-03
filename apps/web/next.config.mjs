@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['ipfs.io', '0g.ai', 'gateway.0g.ai'],
+    domains: ['ipfs.io', '0g.ai', 'gateway.0g.ai', 'images.unsplash.com'],
   },
   webpack: (config) => {
     // Optional deps of @wagmi/connectors not available in this build environment

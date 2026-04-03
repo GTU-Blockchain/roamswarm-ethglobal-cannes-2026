@@ -1,12 +1,8 @@
 'use client';
 
-// TODO: Geofence side-effect watcher (renders nothing)
-// - Uses navigator.geolocation.watchPosition
-// - Calls onTrigger(poiId) when user enters 50m radius of a POI
-// - Uses haversineDistance from lib/geofence.ts
-// - Returns null (no UI)
-
+import { useEffect, useRef } from 'react';
 import type { POI } from '@/lib/geofence';
+import { watchGeofence } from '@/lib/geofence';
 
 export interface GeofenceWatcherProps {
   pois: POI[];
@@ -14,5 +10,14 @@ export interface GeofenceWatcherProps {
 }
 
 export function GeofenceWatcher({ pois, onTrigger }: GeofenceWatcherProps) {
+  const onTriggerRef = useRef(onTrigger);
+  onTriggerRef.current = onTrigger;
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+    const stop = watchGeofence(pois, (poiId) => onTriggerRef.current(poiId));
+    return stop;
+  }, [pois]);
+
   return null;
 }

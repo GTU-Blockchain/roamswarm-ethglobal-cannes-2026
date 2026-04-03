@@ -3,6 +3,7 @@ export interface POI {
   name: string;
   lat: number;
   lng: number;
+  image?: string;
 }
 
 export const GEOFENCE_RADIUS_METERS = 50;

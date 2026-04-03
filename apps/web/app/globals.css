@@ -88,7 +88,7 @@ body {
   background-clip: text;
 }
 
-/* Leaflet map overrides */
+/* Leaflet map overrides — scoped z-index so it doesn't bleed into other pages */
 .leaflet-container {
   background: #0A0A0F;
   font-family: inherit;
@@ -97,4 +97,26 @@ body {
 .leaflet-control-attribution {
   background: rgba(10, 10, 15, 0.8) !important;
   color: rgba(255, 255, 255, 0.4) !important;
+  font-size: 10px !important;
 }
+
+/* Keep Leaflet z-indexes contained below app modals */
+.leaflet-pane         { z-index: 400; }
+.leaflet-tile-pane    { z-index: 200; }
+.leaflet-overlay-pane { z-index: 400; }
+.leaflet-shadow-pane  { z-index: 500; }
+.leaflet-marker-pane  { z-index: 600; }
+.leaflet-tooltip-pane { z-index: 650; }
+.leaflet-popup-pane   { z-index: 700; }
+.leaflet-map-pane canvas { z-index: 100; }
+.leaflet-map-pane svg    { z-index: 200; }
+.leaflet-control      { z-index: 800; }
+
+/* Dark glassmorphism popup */
+.leaflet-popup-content-wrapper {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.leaflet-popup-tip-container { display: none; }
