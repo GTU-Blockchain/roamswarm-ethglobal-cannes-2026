@@ -10,6 +10,12 @@ const MOCK_EXPERIENCES: Record<string, ExperienceResult> = {
       name: 'Café Roma',
       isOpen: true,
       note: 'Excellent croque-monsieur, 3 min walk east along La Croisette.',
+      suggestedBy: [
+        { name: 'alice.eth' },
+        { name: 'bob.eth' },
+        { name: 'marco.eth' },
+        { name: 'sophie.eth' },
+      ],
     },
     audioUrl: '',
   },

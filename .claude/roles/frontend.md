@@ -9,17 +9,17 @@ Next.js 14 (App Router) · Tailwind CSS · TypeScript · Reown AppKit · Leaflet
 ## Task List (in order)
 
 ### Phase 1 — Foundation
-- [ ] `apps/web/` bağımlılıklarını kur (`npm install`)
-- [ ] `apps/web/app/layout.tsx` — WalletProvider'ı sar, Inter font, dark background
-- [ ] `apps/web/app/globals.css` — Tailwind direktifleri + glassmorphism CSS değişkenleri
-- [ ] Reown AppKit'i `.env`'deki `NEXT_PUBLIC_REOWN_PROJECT_ID` ile bağla
-- [ ] `apps/web/app/page.tsx` — Landing: hero, connect butonu, feature kartları
+- [x] `apps/web/` bağımlılıklarını kur (`npm install`)
+- [x] `apps/web/app/layout.tsx` — WalletProvider'ı sar, Inter font, dark background
+- [x] `apps/web/app/globals.css` — Tailwind direktifleri + glassmorphism CSS değişkenleri
+- [x] Reown AppKit'i `.env`'deki `NEXT_PUBLIC_REOWN_PROJECT_ID` ile bağla
+- [x] `apps/web/app/page.tsx` — Landing: hero, connect butonu, feature kartları
 
 ### Phase 2 — Map + Geofence
-- [ ] `components/MapView.tsx` — Leaflet dark tile, Cannes merkezi, POI marker'ları (3 state)
-- [ ] `components/GeofenceWatcher.tsx` — watchPosition + haversine, 50m tetik
-- [ ] `apps/web/app/map/page.tsx` — MapView'i dynamic import (no SSR) ile sar
-- [ ] `components/UnlockModal.tsx` — Pay USDC / Redeem Points seçimi, glassmorphism
+- [x] `components/MapView.tsx` — Leaflet dark tile, Cannes merkezi, POI marker'ları (3 state)
+- [x] `components/GeofenceWatcher.tsx` — watchPosition + haversine, 50m tetik
+- [x] `apps/web/app/map/page.tsx` — MapView'i dynamic import (no SSR) ile sar
+- [x] `components/UnlockModal.tsx` — Pay USDC / Redeem Points seçimi, glassmorphism
 
 ### Phase 3 — Payment + Experience
 - [ ] `components/PaymentGate.tsx` — x402 header inşası, tx status gösterimi
