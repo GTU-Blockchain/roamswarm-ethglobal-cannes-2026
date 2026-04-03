@@ -30,6 +30,14 @@ createAppKit({
   features: {
     analytics: false,
   },
+  themeMode: 'dark',
+  themeVariables: {
+    '--w3m-accent': '#F5A623',
+    '--w3m-color-mix': '#F5A623',
+    '--w3m-color-mix-strength': 20,
+    '--w3m-border-radius-master': '8px',
+    '--w3m-font-family': 'Inter, sans-serif',
+  },
 });
 
 export function WalletProvider({ children }: { children: ReactNode }) {

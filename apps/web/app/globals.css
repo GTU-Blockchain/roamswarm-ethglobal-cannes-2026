@@ -8,6 +8,12 @@
   --glass-blur: 12px;
   --roam-gold: #F5A623;
   --roam-dark: #0A0A0F;
+
+  /* Reown AppKit theme */
+  --w3m-accent: #F5A623;
+  --w3m-color-mix: #F5A623;
+  --w3m-color-mix-strength: 20;
+  --w3m-border-radius-master: 8px;
 }
 
 * {
@@ -53,6 +59,33 @@ body {
     background-size: 200% 100%;
     animation: shimmer 2s linear infinite;
   }
+}
+
+/* Landing page animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.animate-float { animation: float 6s ease-in-out infinite; }
+.animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
+
+.glass-morphism {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.text-gradient-gold {
+  background: linear-gradient(135deg, #f5a623 0%, #ffd700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 /* Leaflet map overrides */
