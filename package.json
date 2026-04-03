@@ -1,0 +1,14 @@
+{
+  "name": "roam-swarm",
+  "private": true,
+  "workspaces": ["apps/web", "contracts", "agents/*"],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  }
+}

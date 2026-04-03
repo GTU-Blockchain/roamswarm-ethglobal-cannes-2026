@@ -1,0 +1,14 @@
+[
+  { "id": "cannes-01", "name": "Palais des Festivals", "lat": 43.5503, "lng": 7.0174 },
+  { "id": "cannes-02", "name": "La Croisette", "lat": 43.5514, "lng": 7.0271 },
+  { "id": "cannes-03", "name": "Marché Forville", "lat": 43.5528, "lng": 7.0138 },
+  { "id": "cannes-04", "name": "Rue Meynadier", "lat": 43.5521, "lng": 7.0142 },
+  { "id": "cannes-05", "name": "Le Suquet", "lat": 43.5508, "lng": 7.0103 },
+  { "id": "cannes-06", "name": "Port Vieux Ferry Point", "lat": 43.5493, "lng": 7.0118 },
+  { "id": "cannes-07", "name": "Villa Domergue", "lat": 43.5567, "lng": 7.0298 },
+  { "id": "cannes-08", "name": "Hôtel Carlton", "lat": 43.5519, "lng": 7.0245 },
+  { "id": "cannes-09", "name": "Allée de la Liberté", "lat": 43.5497, "lng": 7.0171 },
+  { "id": "cannes-10", "name": "Palais Carnot", "lat": 43.5536, "lng": 7.0151 },
+  { "id": "cannes-11", "name": "Musée de la Castre", "lat": 43.5503, "lng": 7.0097 },
+  { "id": "cannes-12", "name": "Église Notre-Dame d'Espérance", "lat": 43.5499, "lng": 7.0094 }
+]
