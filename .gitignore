@@ -13,6 +13,7 @@ dist/
 artifacts/
 cache/
 typechain-types/
+contracts/deployed-*.json
 
 # Environment variables
 .env

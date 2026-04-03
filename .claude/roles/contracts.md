@@ -4,27 +4,27 @@
 "yazılımcı 2", "developer 2", "dev 2", "contracts", "solidity"
 
 ## Stack
-Hardhat · Solidity ^0.8.24 · OpenZeppelin · Ethereum Sepolia Testnet · World ID 4.0 · ENSv2
+Hardhat · Solidity ^0.8.28 · OpenZeppelin · Ethereum Sepolia Testnet · World ID 4.0 · ENSv2
 
 ## Task List (in order)
 
 ### Phase 1 — Foundation
-- [ ] `contracts/` bağımlılıklarını kur (`npm install`)
-- [ ] `hardhat.config.ts`'e Sepolia RPC + private key bağla (`.env`)
-- [ ] `npx hardhat compile` — tüm kontratlar hatasız derlenmeli
+- [x] `contracts/` bağımlılıklarını kur (`npm install`)
+- [x] `hardhat.config.ts`'e Sepolia RPC + private key bağla (`.env`)
+- [x] `npx hardhat compile` — tüm kontratlar hatasız derlenmeli
 
 ### Phase 2 — Core Contracts
-- [ ] `ContributorRegistry.sol` — World ID `verifyProof` entegrasyonunu tamamla
-- [ ] `RoamEscrow.sol` — `lockPayment`, `release`, `refund` implement et
-- [ ] `CommissionSplitter.sol` — 80/20 split implement et
-- [ ] `UserPOIRegistry.sol` — `recordUnlock`, `getUnlockedCount` implement et
-- [ ] Sepolia'ya deploy: ContributorRegistry + RoamEscrow + CommissionSplitter + UserPOIRegistry
+- [x] `ContributorRegistry.sol` — World ID `verifyProof` entegrasyonunu tamamla
+- [x] `RoamEscrow.sol` — `lockPayment`, `release`, `refund` implement et
+- [x] `CommissionSplitter.sol` — 80/20 split implement et
+- [x] `UserPOIRegistry.sol` — `recordUnlock`, `getUnlockedCount` implement et
+- [x] Sepolia'ya deploy: ContributorRegistry + RoamEscrow + CommissionSplitter + UserPOIRegistry
 
 ### Phase 3 — Points System
-- [ ] `RoamPoints.sol` — `claimDailyPoints()` implement et (UserPOIRegistry'den owned count çek)
-- [ ] `PointsRedeemer.sol` — `redeemForUnlock()` implement et (burn + recordUnlock)
-- [ ] RoamPoints ↔ PointsRedeemer yetkilendirmesini ayarla
-- [ ] Sepolia'ya deploy: RoamPoints + PointsRedeemer
+- [x] `RoamPoints.sol` — `claimDailyPoints()` implement et (UserPOIRegistry'den owned count çek)
+- [x] `PointsRedeemer.sol` — `redeemForUnlock()` implement et (burn + recordUnlock)
+- [x] RoamPoints ↔ PointsRedeemer yetkilendirmesini ayarla
+- [x] Sepolia'ya deploy: RoamPoints + PointsRedeemer
 
 ### Phase 4 — Badges + City
 - [ ] `CityRegistry.sol` — Cannes seed'i doğrula (12 POI)
