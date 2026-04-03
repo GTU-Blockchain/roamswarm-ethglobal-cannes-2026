@@ -27,11 +27,11 @@ Hardhat · Solidity ^0.8.28 · OpenZeppelin · Ethereum Sepolia Testnet · World
 - [x] Sepolia'ya deploy: RoamPoints + PointsRedeemer
 
 ### Phase 4 — Badges + City
-- [ ] `CityRegistry.sol` — Cannes seed'i doğrula (12 POI)
-- [ ] `CityBadgeNFT.sol` — `checkAndMint()` implement et (unlocked == totalPOIs kontrolü + bonus points mint)
-- [ ] `ENSSubnameRegistry.sol` — ENS registry çağrılarını implement et
-- [ ] Sepolia'ya deploy: CityRegistry + CityBadgeNFT + ENSSubnameRegistry
-- [ ] `scripts/deploy.ts` çalıştır — tüm adresleri `.env`'e yaz
+- [x] `CityRegistry.sol` — Cannes seed'i doğrula (12 POI)
+- [x] `CityBadgeNFT.sol` — `checkAndMint()` implement et (unlocked == totalPOIs kontrolü + bonus points mint)
+- [x] `ENSSubnameRegistry.sol` — ENS registry çağrılarını implement et
+- [x] Sepolia'ya deploy: CityRegistry + CityBadgeNFT + ENSSubnameRegistry
+- [x] `scripts/deploy.ts` çalıştır — tüm adresleri `.env`'e yaz
 
 ### Phase 5 — Verify + Seed
 - [ ] `npx hardhat verify --network sepolia` — tüm kontratları Etherscan'da doğrula
