@@ -22,7 +22,7 @@ export function useRoamBalance() {
     abi:          RoamPointsABI,
     functionName: 'balanceOf',
     args:         address ? [address] : undefined,
-    query:        { enabled: !!address },
+    query:        { enabled: !!address, refetchInterval: 15_000 },
   });
 }
 
@@ -48,7 +48,7 @@ export function useLastClaimed() {
     abi:          RoamPointsABI,
     functionName: 'lastClaimed',
     args:         address ? [address] : undefined,
-    query:        { enabled: !!address },
+    query:        { enabled: !!address, refetchInterval: 15_000 },
   });
 }
 

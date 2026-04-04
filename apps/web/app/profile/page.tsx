@@ -187,12 +187,12 @@ export default function ProfilePage() {
   const { data: lastClaimedRaw, refetch: refetchPending } = useLastClaimed();
 
   // On-chain: registry POI count — only registry-recorded unlocks can claim (escrow-locked don't count until agent releases)
-  const { data: onChainPOICountRaw } = useReadContract({
+  const { data: onChainPOICountRaw, refetch: refetchPOICount } = useReadContract({
     address:      CONTRACTS.userPOIRegistry,
     abi:          UserPOIRegistryABI,
     functionName: 'getUserPOICount',
     args:         address ? [address as `0x${string}`] : undefined,
-    query:        { enabled: !!address },
+    query:        { enabled: !!address, refetchInterval: 15_000 },
   });
   const onChainPOICount = onChainPOICountRaw ? Number(onChainPOICountRaw as bigint) : 0;
 
@@ -243,14 +243,20 @@ export default function ProfilePage() {
   const CLAIM_INTERVAL_MS = 24 * 60 * 60 * 1000;
   const POINTS_PER_POI    = 10;
   const lastClaimedMs     = lastClaimedRaw ? Number(lastClaimedRaw as bigint) * 1000 : 0;
+  const nextClaimMs       = lastClaimedMs ? lastClaimedMs + CLAIM_INTERVAL_MS : 0;
+  const msUntilClaim      = Math.max(0, nextClaimMs - Date.now());
+  const hoursUntilClaim   = Math.floor(msUntilClaim / (1000 * 60 * 60));
+  const minsUntilClaim    = Math.floor((msUntilClaim % (1000 * 60 * 60)) / (1000 * 60));
   const pendingNum = (() => {
-    if (cannesUnlocked === 0) return 0;
-    if (lastClaimedMs === 0) return cannesUnlocked * POINTS_PER_POI;
+    if (onChainPOICount === 0) return 0;
+    if (lastClaimedMs === 0) return onChainPOICount * POINTS_PER_POI;
     const elapsed  = Date.now() - lastClaimedMs;
     if (elapsed < CLAIM_INTERVAL_MS) return 0;
     const intervals = Math.floor(elapsed / CLAIM_INTERVAL_MS);
-    return intervals * cannesUnlocked * POINTS_PER_POI;
+    return intervals * onChainPOICount * POINTS_PER_POI;
   })();
+  // Amount user will earn on next claim (shown even when not yet claimable)
+  const nextClaimAmount = onChainPOICount * POINTS_PER_POI;
 
   const displayBadges: CityBadge[] = hasCannesBadge
     ? [{ cityId: 'cannes', cityName: 'Cannes', completedAt: '', poiCount: TOTAL_CANNES_POIS, imageUri: 'https://images.unsplash.com/photo-1533856493584-0c6ca8ca9ce3?w=400&h=400&fit=crop' }]
@@ -267,8 +273,9 @@ export default function ProfilePage() {
     if (claimSuccess) {
       refetchBalance();
       refetchPending();
+      refetchPOICount();
     }
-  }, [claimSuccess, refetchBalance, refetchPending]);
+  }, [claimSuccess, refetchBalance, refetchPending, refetchPOICount]);
 
   // Animate progress ring
   useEffect(() => {
@@ -378,14 +385,14 @@ export default function ProfilePage() {
                     <div className="text-5xl font-black text-white tracking-tight">
                       {loading ? '—' : balNum.toLocaleString()}
                     </div>
-                    <p className="text-sm text-gray-500">Secured on blockchain</p>
+                    
                   </div>
                   <div className="pt-4 border-t border-white/10 space-y-2">
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="text-xs text-gray-500 mb-1">Claimable</div>
-                        <div className={`text-lg font-bold ${pendingNum > 0 && onChainPOICount > 0 ? 'text-green-400' : 'text-white/30'}`}>
-                          {loading ? '…' : `+${pendingNum} ROAM`}
+                        <div className={`text-lg font-bold ${pendingNum > 0 ? 'text-green-400' : 'text-white/60'}`}>
+                          {loading ? '…' : `+${pendingNum > 0 ? pendingNum : nextClaimAmount} ROAM`}
                         </div>
                       </div>
                       <button
@@ -402,12 +409,17 @@ export default function ProfilePage() {
                             <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
                             Claiming…
                           </span>
-                        ) : pendingNum > 0 && onChainPOICount > 0 ? 'Claim' : 'Claimed'}
+                        ) : pendingNum > 0 ? 'Claim' : 'Claimed'}
                       </button>
                     </div>
                     {cannesUnlocked > 0 && onChainPOICount === 0 && (
                       <p className="text-xs text-yellow-500/70">
                         Waiting for agent to confirm POI delivery
+                      </p>
+                    )}
+                    {pendingNum === 0 && onChainPOICount > 0 && msUntilClaim > 0 && (
+                      <p className="text-xs text-white/30">
+                        Next in {hoursUntilClaim}h {minsUntilClaim}m
                       </p>
                     )}
                   </div>
