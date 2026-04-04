@@ -133,7 +133,7 @@ app.post('/recommend', async (req, res) => {
 
   try {
     const venue = await fetchVenueData(poi.name, poi.lat, poi.lng);
-    res.json({ poiId, ...venue });
+    res.json({ poiId, lat: poi.lat, lng: poi.lng, ...venue });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[Scout] Error:', message);

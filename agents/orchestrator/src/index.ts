@@ -38,7 +38,7 @@ async function callLore(poiId: string, lang: string): Promise<string> {
   return data.story;
 }
 
-async function callScout(poiId: string): Promise<{ name: string; isOpen: boolean | null; note: string }> {
+async function callScout(poiId: string): Promise<{ name: string; isOpen: boolean | null; note: string; lat: number; lng: number }> {
   const res = await fetch(`${SCOUT_URL}/recommend`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -46,8 +46,8 @@ async function callScout(poiId: string): Promise<{ name: string; isOpen: boolean
     signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) throw new Error(`Scout agent error: ${res.status}`);
-  const data = await res.json() as { name: string; isOpen: boolean | null; note: string };
-  return { name: data.name, isOpen: data.isOpen, note: data.note };
+  const data = await res.json() as { name: string; isOpen: boolean | null; note: string; lat: number; lng: number };
+  return { name: data.name, isOpen: data.isOpen, note: data.note, lat: data.lat, lng: data.lng };
 }
 
 async function callGuide(story: string, lang: string, poiId: string): Promise<string> {
