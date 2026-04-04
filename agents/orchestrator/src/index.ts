@@ -66,7 +66,15 @@ async function callLore(poiId: string, lang: string): Promise<string> {
   return data.story;
 }
 
-async function callScout(poiId: string): Promise<{ name: string; isOpen: boolean | null; note: string; lat: number; lng: number }> {
+interface VenueResult { name: string; isOpen: boolean | null; note: string; lat: number; lng: number }
+
+function placeToVenue(p: { name: string; isOpen: boolean | null; rating: number | null; lat: number; lng: number; types: string[] }): VenueResult {
+  const ratingNote = p.rating ? ` · ${p.rating}⭐` : '';
+  const typeLabel  = p.types?.[0]?.replace(/_/g, ' ') ?? 'venue';
+  return { name: p.name, isOpen: p.isOpen, note: `Nearby ${typeLabel}${ratingNote}`, lat: p.lat, lng: p.lng };
+}
+
+async function callScout(poiId: string): Promise<{ venue: VenueResult; venues: VenueResult[] }> {
   const res = await fetch(`${SCOUT_URL}/recommend`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -74,8 +82,14 @@ async function callScout(poiId: string): Promise<{ name: string; isOpen: boolean
     signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) throw new Error(`Scout agent error: ${res.status}`);
-  const data = await res.json() as { name: string; isOpen: boolean | null; note: string; lat: number; lng: number };
-  return { name: data.name, isOpen: data.isOpen, note: data.note, lat: data.lat, lng: data.lng };
+  const data = await res.json() as {
+    places: { name: string; isOpen: boolean | null; rating: number | null; lat: number; lng: number; types: string[] }[];
+  };
+  if (!data.places?.length) throw new Error('Scout returned no places');
+  // Sort by rating desc, pick highest as top venue
+  const sorted = [...data.places].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+  const venues = sorted.map(placeToVenue);
+  return { venue: venues[0], venues };
 }
 
 async function callGuide(story: string, lang: string, poiId: string): Promise<string> {
@@ -107,10 +121,11 @@ app.post('/orchestrate', async (req, res) => {
     const story = await callLore(poiId, lang);
 
     // Scout + Guide in parallel
-    const [venue, audioUrl] = await Promise.all([
+    const [scoutResult, audioUrl] = await Promise.all([
       callScout(poiId).catch((err: Error) => {
         console.warn('[Orchestrator] Scout failed:', err.message);
-        return { name: 'Nearby venue', isOpen: null, note: 'Venue data unavailable' };
+        const fallback = { name: 'Nearby venue', isOpen: null, note: 'Venue data unavailable', lat: 0, lng: 0 };
+        return { venue: fallback, venues: [fallback] };
       }),
       callGuide(story, lang, poiId).catch((err: Error) => {
         console.warn('[Orchestrator] Guide failed:', err.message);
@@ -120,7 +135,7 @@ app.post('/orchestrate', async (req, res) => {
 
     const elapsed = Date.now() - startTime;
     console.log(`[Orchestrator] Done in ${elapsed}ms`);
-    res.json({ poiId, story, venue, audioUrl, elapsed });
+    res.json({ poiId, story, venue: scoutResult.venue, venues: scoutResult.venues, audioUrl, elapsed });
 
     // Fire-and-forget: release escrow payment after delivering audioUrl
     releaseEscrow(poiId, userAddress, audioUrl).catch(() => {});
@@ -158,9 +173,10 @@ app.get('/orchestrate/stream', async (req: Request, res: Response) => {
   try {
     // Step 1: Scout (fast, start immediately)
     send('status', { step: 'scout', message: 'Finding nearby venues...' });
-    const venuePromise = callScout(poiId).catch((err: Error) => {
+    const scoutPromise = callScout(poiId).catch((err: Error) => {
       console.warn('[Orchestrator/SSE] Scout failed:', err.message);
-      return { name: 'Nearby venue', isOpen: null, note: 'Venue data unavailable' };
+      const fallback = { name: 'Nearby venue', isOpen: null, note: 'Venue data unavailable', lat: 0, lng: 0 };
+      return { venue: fallback, venues: [fallback] };
     });
 
     // Step 2: Lore (slow LLM)
@@ -169,8 +185,8 @@ app.get('/orchestrate/stream', async (req: Request, res: Response) => {
     send('story', { story });
 
     // Step 3: Venue result (should be done by now)
-    const venue = await venuePromise;
-    send('venue', { venue });
+    const scoutResult = await scoutPromise;
+    send('venue', { venue: scoutResult.venue, venues: scoutResult.venues });
 
     // Step 4: Guide (TTS + 0G Storage)
     send('status', { step: 'guide', message: 'Synthesizing audio narration...' });
@@ -181,7 +197,7 @@ app.get('/orchestrate/stream', async (req: Request, res: Response) => {
     send('audio', { audioUrl });
 
     const elapsed = Date.now() - startTime;
-    send('done', { poiId, story, venue, audioUrl, elapsed });
+    send('done', { poiId, story, venue: scoutResult.venue, venues: scoutResult.venues, audioUrl, elapsed });
     console.log(`[Orchestrator/SSE] Done in ${elapsed}ms`);
 
     // Fire-and-forget: release escrow after SSE delivery

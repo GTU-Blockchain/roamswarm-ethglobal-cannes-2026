@@ -135,20 +135,18 @@ app.post('/synthesize', async (req, res) => {
     const audioBuffer = await textToSpeech(story);
     console.log('[Guide] TTS complete, size:', audioBuffer.length, 'bytes');
 
-    // Step 2: Upload to 0G Storage
-    let audioUrl: string;
-    let storage: string;
+    // Step 2: Return base64 immediately so the browser can play right away,
+    // then upload to 0G Storage in the background for permanent decentralized storage.
+    // (0G finalization takes minutes; returning the URL before upload completes causes
+    //  "no supported sources" errors because the file isn't accessible yet.)
+    const audioUrl = `data:audio/mpeg;base64,${audioBuffer.toString('base64')}`;
+    const storage = 'base64-inline';
 
-    try {
-      audioUrl = await uploadTo0GStorage(audioBuffer, poiId);
-      storage = '0g-storage';
-    } catch (storageErr) {
-      // Fallback: return audio as base64 if 0G Storage fails
-      const errMsg = storageErr instanceof Error ? storageErr.message : String(storageErr);
-      console.warn('[Guide] 0G Storage failed, using base64 fallback:', errMsg);
-      audioUrl = `data:audio/mpeg;base64,${audioBuffer.toString('base64')}`;
-      storage = 'base64-fallback';
-    }
+    uploadTo0GStorage(audioBuffer, poiId).then((ogUrl) => {
+      console.log('[Guide] 0G Storage finalized:', ogUrl);
+    }).catch((e: unknown) => {
+      console.warn('[Guide] 0G Storage background upload failed:', e);
+    });
 
     // Save to Cache
     audioCache.set(cacheKey, { audioUrl, storage, size: audioBuffer.length });

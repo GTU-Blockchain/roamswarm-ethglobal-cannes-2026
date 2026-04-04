@@ -59,10 +59,12 @@ export function AudioPlayer({ audioUrl, poiName }: AudioPlayerProps) {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [audioError, setAudioError] = useState(false);
 
   const isGenerating = !audioUrl;
 
   useEffect(() => {
+    setAudioError(false);
     const audio = audioRef.current;
     if (!audio) return;
 
@@ -72,26 +74,34 @@ export function AudioPlayer({ audioUrl, poiName }: AudioPlayerProps) {
       setProgress(audio.duration ? (audio.currentTime / audio.duration) * 100 : 0);
     };
     const onEnded = () => setPlaying(false);
+    const onError = () => { setAudioError(true); setPlaying(false); };
 
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('ended', onEnded);
+    audio.addEventListener('error', onError);
     return () => {
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('error', onError);
     };
   }, [audioUrl]);
 
   function togglePlay() {
     const audio = audioRef.current;
-    if (!audio || isGenerating) return;
+    if (!audio || isGenerating || audioError) return;
     if (playing) {
       audio.pause();
       setPlaying(false);
     } else {
-      audio.play();
-      setPlaying(true);
+      audio.play().then(() => {
+        setPlaying(true);
+      }).catch((err: Error) => {
+        console.warn('[AudioPlayer] play() failed:', err.message);
+        setPlaying(false);
+        setAudioError(true);
+      });
     }
   }
 
@@ -148,7 +158,7 @@ export function AudioPlayer({ audioUrl, poiName }: AudioPlayerProps) {
       <div className="flex items-center gap-3">
         <button
           onClick={togglePlay}
-          disabled={isGenerating}
+          disabled={isGenerating || audioError}
           className="w-10 h-10 rounded-full bg-roam-gold flex items-center justify-center shrink-0 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity active:scale-95"
           aria-label={playing ? 'Pause' : 'Play'}
         >
@@ -176,7 +186,12 @@ export function AudioPlayer({ audioUrl, poiName }: AudioPlayerProps) {
         </div>
       </div>
 
-      {audioUrl && <audio ref={audioRef} src={audioUrl} preload="metadata" />}
+      {audioUrl && <audio ref={audioRef} src={audioUrl} preload="metadata" crossOrigin="anonymous" />}
+      {audioError && (
+        <p className="text-[11px] text-red-400/70 text-center">
+          Audio unavailable — format not supported by browser
+        </p>
+      )}
     </div>
   );
 }

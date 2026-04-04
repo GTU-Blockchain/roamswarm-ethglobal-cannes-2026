@@ -9,7 +9,8 @@ export interface VenueRecommendation {
 
 export interface ExperienceResult {
   story:    string;
-  venue:    VenueRecommendation;
+  venue:    VenueRecommendation;   // top pick (backwards compat)
+  venues?:  VenueRecommendation[]; // all places from Scout
   audioUrl: string; // 0G Storage URL
 }
 
@@ -20,6 +21,7 @@ export interface SSEProgress {
   message?: string;
   story?:   string;
   venue?:   VenueRecommendation;
+  venues?:  VenueRecommendation[];
   audioUrl?: string;
   error?:   string;
 }
@@ -103,6 +105,7 @@ export function streamExperience(
               onResult({
                 story:    payload.story as string,
                 venue:    payload.venue as VenueRecommendation,
+                venues:   payload.venues as VenueRecommendation[] | undefined,
                 audioUrl: payload.audioUrl as string,
               });
               return;

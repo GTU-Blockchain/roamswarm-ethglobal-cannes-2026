@@ -33,7 +33,6 @@ export default function ExperiencePage() {
   const [stepMsg, setStepMsg]       = useState('Connecting to agent swarm…');
   const [partialStory, setPartial]  = useState<string | null>(null);
   const cancelRef                   = useRef<(() => void) | null>(null);
-  const autoStarted                 = useRef(false);
 
   // On-chain access check: registry unlock OR escrow locked payment
   const poiBytes32 = poiIdFromSlug(poiId);
@@ -67,11 +66,11 @@ export default function ExperiencePage() {
   const hasAccess = isUnlocked || hasLockedPayment;
 
   // Auto-start: ?unlocked=1 OR chain confirms access
+  // Uses pageState (React state) as guard instead of a ref so StrictMode remounts work correctly
   useEffect(() => {
-    if (autoStarted.current) return;
+    if (pageState !== 'gate') return;
     const fromUrl = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('unlocked') === '1';
     if (fromUrl || hasAccess) {
-      autoStarted.current = true;
       startStream();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -271,52 +270,33 @@ export default function ExperiencePage() {
                 <p className="text-sm text-white/80 leading-relaxed">{experience.story}</p>
               </div>
 
-              {/* Venue card */}
-              {experience.venue && (
+              {/* Nearby Venues */}
+              {(experience.venues ?? (experience.venue ? [experience.venue] : [])).length > 0 && (
                 <div className="glass rounded-2xl p-5 space-y-3">
                   <div className="flex items-center gap-2 text-roam-gold">
                     <Utensils size={15} />
-                    <span className="text-xs font-semibold uppercase tracking-wider">Nearby Venue</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider">Nearby Venues</span>
                   </div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-sm">{experience.venue.name}</p>
-                      <p className="text-xs text-white/55 mt-0.5 leading-relaxed">{experience.venue.note}</p>
-                    </div>
-                    <span
-                      className={`shrink-0 flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${
-                        experience.venue.isOpen
-                          ? 'bg-green-500/15 text-green-400'
-                          : 'bg-red-500/15 text-red-400'
-                      }`}
-                    >
-                      <Clock size={11} />
-                      {experience.venue.isOpen ? 'Open' : 'Closed'}
-                    </span>
-                  </div>
-
-                  {experience.venue.suggestedBy && experience.venue.suggestedBy.length > 0 && (
-                    <div className="flex items-center gap-2 pt-1 border-t border-white/20">
-                      <div className="flex -space-x-2">
-                        {experience.venue.suggestedBy.slice(0, 3).map((person, i) => (
-                          <div
-                            key={i}
-                            className="w-6 h-6 rounded-full bg-roam-accent/80 border-2 border-roam-dark flex items-center justify-center text-[9px] font-bold text-white uppercase"
-                            title={person.name}
-                          >
-                            {person.name.slice(0, 2)}
-                          </div>
-                        ))}
+                  <div className="space-y-2">
+                    {(experience.venues ?? [experience.venue]).map((v, i) => (
+                      <div key={i} className="flex items-start justify-between gap-2 py-2 border-b border-white/5 last:border-0">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm">{v.name}</p>
+                          <p className="text-xs text-white/55 mt-0.5 leading-relaxed">{v.note}</p>
+                        </div>
+                        <span
+                          className={`shrink-0 flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${
+                            v.isOpen
+                              ? 'bg-green-500/15 text-green-400'
+                              : 'bg-red-500/15 text-red-400'
+                          }`}
+                        >
+                          <Clock size={11} />
+                          {v.isOpen ? 'Open' : 'Closed'}
+                        </span>
                       </div>
-                      <p className="text-[11px] text-white/45 leading-tight">
-                        Suggested by{' '}
-                        <span className="text-white/70 font-medium">{experience.venue.suggestedBy[0].name}</span>
-                        {experience.venue.suggestedBy.length > 1 && (
-                          <> + {experience.venue.suggestedBy.length - 1} more</>
-                        )}
-                      </p>
-                    </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
               )}
 
