@@ -369,7 +369,7 @@ export default function ProfilePage() {
             {/* ── POINTS ── */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }}
               whileHover={{ scale: 1.02, y: -2 }}
-              className="lg:col-span-4">
+              className="lg:col-span-4 h-[350px]">
               <Card className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-[0_0_30px_rgba(245,166,35,0.15)] hover:shadow-[0_0_50px_rgba(245,166,35,0.3)] transition-shadow duration-300 relative h-full">
                 <div className="absolute inset-0 bg-gradient-to-br from-[#F5A623]/5 to-transparent pointer-events-none" />
                 <CardContent className="p-6 space-y-6 relative z-10 h-full flex flex-col">
@@ -430,7 +430,7 @@ export default function ProfilePage() {
             {/* ── PROGRESS RING ── */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }}
               whileHover={{ scale: 1.02, y: -2 }}
-              className="lg:col-span-4">
+              className="lg:col-span-4 h-[350px]">
               <Card className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-[0_0_30px_rgba(245,166,35,0.15)] hover:shadow-[0_0_50px_rgba(245,166,35,0.3)] transition-shadow duration-300 h-full">
                 <CardContent className="p-5 h-full flex flex-col gap-4">
                   {/* Header with city nav */}
@@ -471,13 +471,13 @@ export default function ProfilePage() {
             {/* ── LOCATIONS ── */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.3 }}
               whileHover={{ scale: 1.02, y: -2 }}
-              className="lg:col-span-4">
+              className="lg:col-span-4 h-[350px]">
               <Card className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-[0_0_30px_rgba(245,166,35,0.15)] hover:shadow-[0_0_50px_rgba(245,166,35,0.3)] transition-shadow duration-300 h-full">
                 <CardContent className="p-5 space-y-3 h-full flex flex-col">
                   <h2 className="text-sm font-semibold text-white flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-[#F5A623]" />Unlocked Locations
                   </h2>
-                  <div className="flex-1 space-y-2 overflow-y-auto">
+                  <div className="flex-1 min-h-0 space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent pr-1">
                     {loading && (
                       <p className="text-xs text-white/40 text-center py-4">Loading…</p>
                     )}
