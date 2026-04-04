@@ -5,11 +5,16 @@ interface ICommissionSplitter {
     function split(address contributor) external payable;
 }
 
+interface IUserPOIRegistry {
+    function recordUnlock(address user, bytes32 poiId) external;
+}
+
 /// @title RoamEscrow
 /// @notice Holds ETH payment; releases to CommissionSplitter when audio URL delivered from 0G
 contract RoamEscrow {
     address public owner;
     ICommissionSplitter public commissionSplitter;
+    IUserPOIRegistry public poiRegistry;
 
     struct Payment {
         address payer;
@@ -30,9 +35,10 @@ contract RoamEscrow {
         _;
     }
 
-    constructor(address _commissionSplitter) {
+    constructor(address _commissionSplitter, address _poiRegistry) {
         owner = msg.sender;
         commissionSplitter = ICommissionSplitter(_commissionSplitter);
+        poiRegistry = IUserPOIRegistry(_poiRegistry);
     }
 
     function lockPayment(bytes32 poiId, address contributor) external payable {
@@ -59,6 +65,9 @@ contract RoamEscrow {
 
         p.released = true;
         commissionSplitter.split{value: p.amount}(p.contributor);
+
+        // Record unlock so user's progress is tracked (points accrual + badge eligibility)
+        poiRegistry.recordUnlock(p.payer, poiId);
 
         emit PaymentReleased(poiId, audioUrl);
     }

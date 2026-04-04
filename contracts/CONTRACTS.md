@@ -11,7 +11,7 @@ Smart contract interface reference for frontend and agent integration.
 |---|---|
 | `CommissionSplitter` | `0xeDF81E3bAE711848a0CBc3B02351624646a9E4ac` |
 | `UserPOIRegistry` | `0x9d0530bc24694E5e1f6b74239fAa0442Eb6072CC` |
-| `RoamEscrow` | `0x3c6869AB251b03D5ecF13DEAba13391eCfb3C809` |
+| `RoamEscrow` | *(redeploy needed — run `deploy-phase2.ts`)* |
 | `ContributorRegistry` | `0x29Ee229a3Cf875f707C35B83C82119Cf685fEA68` |
 | `RoamPoints` | `0x9ca3e0044485508522CDE1651F9E7DCC13B46517` |
 | `PointsRedeemer` | `0xA951BF3C4CDcBA81f5E8A2112b4afD744C9E5E8D` |
@@ -164,7 +164,8 @@ escrow.once(filter, (poiId, audioUrl) => {
 3. Backend: Orchestrator calls Lore + Scout + Guide agents
 4. Backend: escrow.release(poiId, audioUrl)  ← owner-only
 5. CommissionSplitter: 20% → contributor, 80% → platform
-6. Frontend listens for PaymentReleased event → receives audioUrl
+6. UserPOIRegistry.recordUnlock(payer, poiId)  ← automatic inside release()
+7. Frontend listens for PaymentReleased event → receives audioUrl
 ```
 
 ---
@@ -579,12 +580,11 @@ cp contracts/artifacts/UserPOIRegistry.sol/UserPOIRegistry.json apps/web/lib/abi
 ```
 Paid unlock (x402):
   user → RoamEscrow.lockPayment(poiId, contributor) { value: X ETH }
-       → backend receives event → Orchestrator runs agents
+       → backend receives PaymentLocked event → Orchestrator runs agents
        → backend → RoamEscrow.release(poiId, audioUrl)
        → CommissionSplitter: 20% contributor / 80% platform
-       → [implicit] UserPOIRegistry.recordUnlock() called by RoamEscrow? 
-         ↳ NOTE: backend should call UserPOIRegistry.recordUnlock() separately
-       → backend → CityBadgeNFT.checkAndMint(user, cityId)
+       → UserPOIRegistry.recordUnlock(payer, poiId)  ← automatic inside release()
+       → backend listens for POIUnlocked event → CityBadgeNFT.checkAndMint(user, cityId)
        → frontend receives PaymentReleased event with audioUrl
 
 Free unlock (ROAM points):

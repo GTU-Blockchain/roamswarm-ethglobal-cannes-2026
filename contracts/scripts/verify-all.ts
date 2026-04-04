@@ -73,8 +73,8 @@ async function main() {
   // UserPOIRegistry() — no args
   await verify('UserPOIRegistry', poiRegistryAddr, []);
 
-  // RoamEscrow(address _commissionSplitter)
-  await verify('RoamEscrow', escrowAddr, [splitterAddr]);
+  // RoamEscrow(address _commissionSplitter, address _poiRegistry)
+  await verify('RoamEscrow', escrowAddr, [splitterAddr, poiRegistryAddr]);
 
   // ContributorRegistry(address _worldIdAddress, uint256 _externalNullifier)
   await verify('ContributorRegistry', contributorAddr, [
