@@ -5,10 +5,13 @@ import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, MapPin, BookOpen, Utensils, Clock, Radio } from 'lucide-react';
 import { useAppKitAccount } from '@reown/appkit/react';
+import { useReadContracts } from 'wagmi';
+import { keccak256, encodePacked } from 'viem';
 import { AudioPlayer } from '@/components/AudioPlayer';
 import { PaymentGate } from '@/components/PaymentGate';
 import { SwarmStatus } from '@/components/SwarmStatus';
 import { streamExperience, type ExperienceResult, type SSEProgress } from '@/lib/agents';
+import { CONTRACTS, UserPOIRegistryABI, RoamEscrowABI, poiIdFromSlug } from '@/lib/contracts';
 
 type PageState = 'gate' | 'loading' | 'ready' | 'error';
 
@@ -30,15 +33,49 @@ export default function ExperiencePage() {
   const [stepMsg, setStepMsg]       = useState('Connecting to agent swarm…');
   const [partialStory, setPartial]  = useState<string | null>(null);
   const cancelRef                   = useRef<(() => void) | null>(null);
+  const autoStarted                 = useRef(false);
 
-  // Auto-load if ?unlocked=1
+  // On-chain access check: registry unlock OR escrow locked payment
+  const poiBytes32 = poiIdFromSlug(poiId);
+  const escrowKey  = address
+    ? keccak256(encodePacked(['bytes32', 'address'], [poiBytes32, address as `0x${string}`]))
+    : undefined;
+
+  const { data: accessData } = useReadContracts({
+    contracts: [
+      {
+        address:      CONTRACTS.userPOIRegistry,
+        abi:          UserPOIRegistryABI,
+        functionName: 'unlockedPOIs' as const,
+        args:         [address as `0x${string}`, poiBytes32],
+      },
+      {
+        address:      CONTRACTS.roamEscrow,
+        abi:          RoamEscrowABI,
+        functionName: 'payments' as const,
+        args:         [escrowKey as `0x${string}`],
+      },
+    ],
+    query: { enabled: !!address && !!escrowKey },
+  });
+
+  const isUnlocked = accessData?.[0]?.result === true;
+  const payment    = accessData?.[1]?.result as [string, string, bigint, boolean, boolean] | undefined;
+  const hasLockedPayment = payment
+    ? payment[0] !== '0x0000000000000000000000000000000000000000' && !payment[3] && !payment[4]
+    : false;
+  const hasAccess = isUnlocked || hasLockedPayment;
+
+  // Auto-start: ?unlocked=1 OR chain confirms access
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const sp = new URLSearchParams(window.location.search);
-      if (sp.get('unlocked') === '1') startStream();
+    if (autoStarted.current) return;
+    const fromUrl = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('unlocked') === '1';
+    if (fromUrl || hasAccess) {
+      autoStarted.current = true;
+      startStream();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hasAccess]);
 
   // Cleanup stream on unmount
   useEffect(() => () => { cancelRef.current?.(); }, []);

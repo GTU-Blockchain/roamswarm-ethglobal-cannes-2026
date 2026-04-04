@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { useAppKitAccount } from '@reown/appkit/react';
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { parseEther } from 'viem';
+import { useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { parseEther, keccak256, encodePacked } from 'viem';
 import { UnlockModal } from '@/components/UnlockModal';
 import poisData from '@/data/cannes-pois.json';
 import type { POI } from '@/lib/geofence';
@@ -39,8 +39,43 @@ export default function MapPage() {
   const router = useRouter();
   const { address } = useAppKitAccount();
   const [activePoi, setActivePoi] = useState<POI | null>(null);
-  const [ownedPoiIds, setOwnedPoiIds] = useState<string[]>([]);
   const [devPoiIndex, setDevPoiIndex] = useState(0);
+
+  // Batch-check all POIs: registry unlock + escrow locked payment
+  const poiBytes32s = pois.map((p) => poiIdFromSlug(p.id));
+  const escrowKeys = address
+    ? poiBytes32s.map((b) => keccak256(encodePacked(['bytes32', 'address'], [b, address as `0x${string}`])))
+    : [];
+
+  const { data: unlockedResults, refetch: refetchUnlocked } = useReadContracts({
+    contracts: [
+      ...pois.map((p) => ({
+        address:      CONTRACTS.userPOIRegistry,
+        abi:          UserPOIRegistryABI,
+        functionName: 'unlockedPOIs' as const,
+        args:         [address as `0x${string}`, poiIdFromSlug(p.id)],
+      })),
+      ...escrowKeys.map((k) => ({
+        address:      CONTRACTS.roamEscrow,
+        abi:          RoamEscrowABI,
+        functionName: 'payments' as const,
+        args:         [k],
+      })),
+    ],
+    query: { enabled: !!address },
+  });
+
+  const n = pois.length;
+  const ownedPoiIds = unlockedResults
+    ? pois.filter((_, i) => {
+        const isUnlocked = unlockedResults[i]?.result === true;
+        const payment = unlockedResults[n + i]?.result as [string, string, bigint, boolean, boolean] | undefined;
+        const hasLockedPayment = payment
+          ? payment[0] !== '0x0000000000000000000000000000000000000000' && !payment[3] && !payment[4]
+          : false;
+        return isUnlocked || hasLockedPayment;
+      }).map((p) => p.id)
+    : [];
 
   // On-chain: ROAM balance
   const { data: balanceRaw } = useRoamBalance();
@@ -63,19 +98,18 @@ export default function MapPage() {
   // On-chain: redeemForUnlock (ROAM path)
   const { redeemForUnlock, isPending: isRedeeming, isSuccess: redeemSuccess } = useRedeemForUnlock();
 
-  // After either payment succeeds → mark owned + navigate
+  // After either payment succeeds → refetch chain state + navigate
   useEffect(() => {
     if ((lockSuccess || redeemSuccess) && activePoi && address) {
-      setOwnedPoiIds((prev) => [...prev, activePoi.id]);
+      refetchUnlocked();
       setActivePoi(null);
       router.push(`/experience/${activePoi.id}?unlocked=1`);
     }
-  }, [lockSuccess, redeemSuccess, activePoi, address, router]);
+  }, [lockSuccess, redeemSuccess, activePoi, address, router, refetchUnlocked]);
 
   // Auto-skip modal if POI already unlocked on-chain
   useEffect(() => {
     if (isAlreadyUnlocked && activePoi) {
-      setOwnedPoiIds((prev) => [...prev, activePoi.id]);
       setActivePoi(null);
       router.push(`/experience/${activePoi.id}?unlocked=1`);
     }
