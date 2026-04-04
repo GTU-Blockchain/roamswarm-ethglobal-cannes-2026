@@ -17,7 +17,7 @@ function AmbientBackground() {
     <div className="fixed inset-0 z-0 pointer-events-none">
       <div className="absolute inset-0 bg-gradient-to-br from-[#0A0A0F] via-[#1a1a2e] to-[#0A0A0F]" />
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#F5A623] rounded-full opacity-10 blur-[120px] animate-pulse-glow" style={{ animationDelay: '0s' }} />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#F5A623] rounded-full opacity-10 blur-[120px] animate-pulse-glow" style={{ animationDelay: '1.5s' }} />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500 rounded-full opacity-10 blur-[120px] animate-pulse-glow" style={{ animationDelay: '1.5s' }} />
       <div className="absolute inset-0 opacity-5"
         style={{
           backgroundImage: 'linear-gradient(rgba(245,166,35,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(245,166,35,0.1) 1px, transparent 1px)',
@@ -27,14 +27,6 @@ function AmbientBackground() {
     </div>
   );
 }
-
-/* ─── Per-city gradient ─── */
-const CITY_GRADIENTS: Record<string, string> = {
-  cannes: 'linear-gradient(135deg,#f093fb 0%,#f5576c 100%)',
-  paris:  'linear-gradient(135deg,#667eea 0%,#764ba2 100%)',
-  nice:   'linear-gradient(135deg,#4facfe 0%,#00f2fe 100%)',
-};
-const DEFAULT_GRADIENT = 'linear-gradient(135deg,#a855f7 0%,#3b82f6 100%)';
 
 /* ─── Badge Detail Modal ─── */
 function BadgeModal({ badge, onClose }: { badge: CityBadge; onClose: () => void }) {
@@ -70,42 +62,41 @@ function BadgeModal({ badge, onClose }: { badge: CityBadge; onClose: () => void 
   );
 }
 
-/* ─── Small badge card (grid) ─── */
+
+/* ─── Small badge card ─── */
+const CITY_GRADIENTS: Record<string, string> = {
+  cannes: 'linear-gradient(135deg,#f093fb 0%,#f5576c 100%)',
+  paris:  'linear-gradient(135deg,#667eea 0%,#764ba2 100%)',
+  nice:   'linear-gradient(135deg,#4facfe 0%,#00f2fe 100%)',
+};
+const DEFAULT_GRADIENT = 'linear-gradient(135deg,#a855f7 0%,#3b82f6 100%)';
+
 function CityBadgeCard({ badge, delay, onClick }: { badge: CityBadge; delay: number; onClick: () => void }) {
-  const [mouse, setMouse] = useState({ x: 0, y: 0 });
+  const [mouse, setMouse] = useState({ x: 50, y: 50 });
   const [hovered, setHovered] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const gradient = CITY_GRADIENTS[badge.cityId] ?? DEFAULT_GRADIENT;
 
   const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!ref.current) return;
-    const r = ref.current.getBoundingClientRect();
+    if (!wrapRef.current) return;
+    const r = wrapRef.current.getBoundingClientRect();
     setMouse({ x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 });
   };
 
   return (
     <motion.div
+      ref={wrapRef}
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.4, delay }}
-      ref={ref}
       onMouseMove={onMove}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={onClick}
-      className="relative overflow-hidden rounded-2xl cursor-pointer group active:scale-95 transition-transform w-[180px] flex-shrink-0"
-      style={{ background: 'rgba(18,18,32,0.85)', border: '1px solid rgba(255,255,255,0.07)' }}
+      className="relative cursor-pointer active:scale-95 transition-transform p-1"
     >
-      {/* Rainbow shimmer */}
-      <div className="absolute inset-0 pointer-events-none transition-opacity duration-300"
-        style={{
-          opacity: hovered ? 0.6 : 0,
-          background: `radial-gradient(circle at ${mouse.x}% ${mouse.y}%, rgba(255,0,255,0.4) 0%, rgba(0,255,255,0.3) 20%, rgba(255,255,0,0.3) 40%, transparent 70%)`,
-          mixBlendMode: 'screen',
-        }}
-      />
-      {/* Rainbow border */}
-      <div className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+      {/* Rainbow border — outside card */}
+      <div className="absolute inset-1 rounded-2xl pointer-events-none transition-opacity duration-300"
         style={{
           opacity: hovered ? 1 : 0,
           background: `conic-gradient(from ${mouse.x * 3.6}deg at ${mouse.x}% ${mouse.y}%, #ff0080,#ff8c00,#ffff00,#00ff00,#00ffff,#0080ff,#8000ff,#ff0080)`,
@@ -116,35 +107,57 @@ function CityBadgeCard({ badge, delay, onClick }: { badge: CityBadge; delay: num
         }}
       />
 
-      <div className="relative z-10 p-3">
-        {/* Square artwork */}
-        <div className="relative w-full aspect-square rounded-xl overflow-hidden mb-3 shadow-lg">
-          <div className="absolute inset-0" style={{ background: gradient }} />
-          {badge.imageUri && (
-            <img src={badge.imageUri} alt={badge.cityName}
-              className="relative z-10 w-full h-full object-cover"
-              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-            />
-          )}
-        </div>
+      <div className="relative overflow-hidden rounded-2xl"
+        style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(20px)' }}
+      >
+        {/* Iridescent glow */}
+        <div className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+          style={{
+            opacity: hovered ? 0.55 : 0,
+            background: `radial-gradient(circle at ${mouse.x}% ${mouse.y}%, rgba(200,100,255,0.5) 0%, rgba(80,220,255,0.35) 30%, rgba(255,100,200,0.2) 55%, transparent 75%)`,
+            mixBlendMode: 'screen',
+          }}
+        />
 
-        {/* Info */}
-        <h3 className="text-sm font-bold text-white truncate">{badge.cityName}</h3>
-        <div className="flex items-center justify-between mt-1">
-          <div className="flex items-center gap-1 text-xs text-gray-400">
-            <MapPin className="w-3 h-3" /><span>Completed</span>
+        {/* Shimmer sweep */}
+        <div className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+          style={{
+            opacity: hovered ? 0.12 : 0,
+            background: 'linear-gradient(110deg, transparent 20%, rgba(255,255,255,0.9) 50%, transparent 80%)',
+            backgroundSize: '200% 100%',
+            animation: hovered ? 'badgeShimmer 2s infinite' : 'none',
+          }}
+        />
+
+        <div className="relative z-10 p-3">
+          {/* Artwork */}
+          <div className="relative w-full aspect-square rounded-xl overflow-hidden mb-2.5 shadow-lg">
+            <div className="absolute inset-0" style={{ background: gradient }} />
+            {badge.imageUri && (
+              <img src={badge.imageUri} alt={badge.cityName}
+                className="relative z-10 w-full h-full object-cover"
+                onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
+            )}
           </div>
-          {badge.tokenId !== undefined && (
-            <span className="font-mono text-[10px] text-white px-2 py-0.5 rounded-full"
-              style={{ background: 'rgba(30,30,40,0.9)' }}>
-              #{badge.tokenId}
-            </span>
-          )}
-        </div>
-      </div>
 
-      {/* Bottom gradient line */}
-      <div className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: gradient }} />
+          <h3 className="text-sm font-bold text-white truncate">{badge.cityName}</h3>
+          <div className="flex items-center justify-between mt-1">
+            <div className="flex items-center gap-1 text-xs text-gray-400">
+              <MapPin className="w-3 h-3" /><span>Completed</span>
+            </div>
+            {badge.tokenId !== undefined && (
+              <span className="font-mono text-[10px] text-white/60 px-1.5 py-0.5 rounded-full"
+                style={{ background: 'rgba(255,255,255,0.08)' }}>
+                #{badge.tokenId}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Bottom gradient line */}
+        <div className="absolute bottom-0 left-0 right-0 h-[2px] opacity-70" style={{ background: gradient }} />
+      </div>
     </motion.div>
   );
 }
@@ -444,7 +457,7 @@ export default function ProfilePage() {
                     <Trophy className="w-4 h-4 text-yellow-400" />City Badges
                     <span className="text-gray-600 text-xs font-normal ml-1">tap to expand</span>
                   </h2>
-                  <div className="flex flex-wrap gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                     {displayBadges.map((badge, i) => (
                       <CityBadgeCard
                         key={badge.cityId}

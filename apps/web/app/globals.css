@@ -112,6 +112,9 @@ body {
 .leaflet-map-pane svg    { z-index: 200; }
 .leaflet-control      { z-index: 800; }
 
+/* Push top-right zoom controls below the map page top bar (~60px) */
+.leaflet-top.leaflet-right { top: 64px; }
+
 /* Dark glassmorphism popup */
 .leaflet-popup-content-wrapper {
   background: transparent !important;

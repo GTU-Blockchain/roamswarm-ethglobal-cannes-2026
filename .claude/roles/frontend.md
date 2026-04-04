@@ -27,17 +27,22 @@ Next.js 14 (App Router) · Tailwind CSS · TypeScript · Reown AppKit · Leaflet
 - [x] `components/AudioPlayer.tsx` — 0G Storage stream, play/pause, waveform
 
 ### Phase 4 — Points + Gamification
-- [ ] `components/PointsBalance.tsx` — bakiye, günlük kazanım, "Free Unlock Available" state
-- [ ] `apps/web/app/profile/page.tsx` — cüzdan, points widget, owned POI listesi, badge galerisi
-- [ ] `components/CityProgress.tsx` — SVG progress ring, animasyonlu dolum
-- [ ] `components/BadgeCard.tsx` — holografik shimmer, city artwork, completion date
+- [x] `components/PointsBalance.tsx` — bakiye, günlük kazanım, "Free Unlock Available" state
+- [x] `apps/web/app/profile/page.tsx` — cüzdan, points widget, owned POI listesi, badge galerisi
+- [x] `components/CityProgress.tsx` — SVG progress ring, animasyonlu dolum
+- [x] `components/BadgeCard.tsx` — holografik shimmer, city artwork, completion date
 
 ### Phase 5 — City + Polish
-- [ ] `apps/web/app/city/[id]/page.tsx` — progress ring, POI listesi, badge CTA
-- [ ] `apps/web/app/contribute/page.tsx` — World ID IDKit widget, form, submit
-- [ ] Tüm sayfalarda mobile (375px) test — overflow yok, tap target min 44px
-- [ ] `apps/web/public/manifest.json` — PWA manifest, ikonlar
+- [x] `apps/web/app/city/[id]/page.tsx` — progress ring, POI listesi, badge CTA
+- [x] `apps/web/app/contribute/page.tsx` — World ID IDKit widget, form, submit
+- [x] Tüm sayfalarda mobile (375px) test — overflow yok, tap target min 44px
+- [x] `apps/web/public/manifest.json` — PWA manifest, ikonlar
 - [ ] Vercel deploy + prod URL
+
+### Phase 6 — Contribution Flow (eklendi)
+- [x] Map popup'a "Suggest edit / contribute" butonu — POI lat/lng/name ile contribute sayfasına yönlendir
+- [x] `contribute/page.tsx` — URL query params ile form pre-fill (lat, lng, name)
+- [x] `components/LocationPickerMap.tsx` — Leaflet mini harita, draggable pin, tüm POI'lar görünür, POI'a tıklayınca place name otomatik dolar
 
 ## Notlar
 - Tüm componentler **21st.dev Magic MCP** ile üretilmeli — `/ui` komutuyla

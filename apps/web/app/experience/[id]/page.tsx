@@ -44,9 +44,15 @@ export default function ExperiencePage() {
   }
 
   return (
-    <div className="min-h-screen bg-roam-dark text-white flex flex-col">
+    <div className="relative min-h-screen text-white flex flex-col overflow-hidden">
+      {/* Ambient background */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0A0A0F] via-[#1a1a2e] to-[#0A0A0F]" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#F5A623] rounded-full opacity-10 blur-[120px] animate-pulse-glow" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500 rounded-full opacity-10 blur-[120px] animate-pulse-glow" style={{ animationDelay: '1.5s' }} />
+      </div>
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 pt-safe-top pt-4 pb-3 border-b border-white/10">
+      <div className="relative z-10 flex items-center gap-3 px-4 pt-safe-top pt-4 pb-3 border-b border-white/10">
         <button
           onClick={() => router.back()}
           className="w-10 h-10 flex items-center justify-center rounded-full glass active:scale-95 transition-transform"
@@ -63,7 +69,7 @@ export default function ExperiencePage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4 max-w-lg mx-auto w-full">
+      <div className="relative z-10 flex-1 overflow-y-auto px-4 py-6 space-y-4 max-w-lg mx-auto w-full">
         <AnimatePresence mode="wait">
 
           {/* Payment Gate */}

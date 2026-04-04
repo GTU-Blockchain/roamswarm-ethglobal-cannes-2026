@@ -34,7 +34,13 @@ export function BadgeCard({ badge }: { badge: CityBadge }) {
   });
 
   return (
-    <div className="relative w-full max-w-sm mx-auto p-4">
+    <div
+      ref={cardRef}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="relative w-full max-w-sm mx-auto p-4"
+    >
       <style>{`
         @keyframes badgeShimmer {
           0%   { background-position: 200% 0; }
@@ -42,35 +48,33 @@ export function BadgeCard({ badge }: { badge: CityBadge }) {
         }
       `}</style>
 
+      {/* Rainbow border — outside Card so overflow-hidden doesn't clip it */}
+      <div className="absolute inset-4 pointer-events-none rounded-xl transition-opacity duration-300"
+        style={{
+          opacity: isHovered ? 1 : 0,
+          background: `conic-gradient(from ${mousePosition.x * 3.6}deg at ${mousePosition.x}% ${mousePosition.y}%,
+            #ff0080, #ff8c00, #ffff00, #00ff00, #00ffff, #0080ff, #8000ff, #ff0080)`,
+          WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+          WebkitMaskComposite: 'xor',
+          maskComposite: 'exclude',
+          padding: '2px',
+        }}
+      />
+
       <Card
-        ref={cardRef}
-        onMouseMove={handleMouseMove}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
         className="relative overflow-hidden shadow-2xl transition-all duration-300 hover:shadow-[0_0_40px_rgba(139,92,246,0.3)]"
         style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(20px)' }}
       >
-        {/* Holographic rainbow shimmer */}
+        {/* Iridescent glow — purple/cyan/pink, follows cursor */}
         <div className="absolute inset-0 pointer-events-none transition-opacity duration-300"
           style={{
-            opacity: isHovered ? 0.6 : 0,
+            opacity: isHovered ? 0.55 : 0,
             background: `radial-gradient(circle at ${mousePosition.x}% ${mousePosition.y}%,
-              rgba(255,0,255,0.4) 0%, rgba(0,255,255,0.3) 20%,
-              rgba(255,255,0,0.3) 40%, rgba(255,0,0,0.2) 60%, transparent 80%)`,
+              rgba(200,100,255,0.5) 0%,
+              rgba(80,220,255,0.35) 30%,
+              rgba(255,100,200,0.2) 55%,
+              transparent 75%)`,
             mixBlendMode: 'screen',
-          }}
-        />
-
-        {/* Rainbow border */}
-        <div className="absolute inset-0 pointer-events-none transition-opacity duration-300"
-          style={{
-            opacity: isHovered ? 1 : 0,
-            background: `conic-gradient(from ${mousePosition.x * 3.6}deg at ${mousePosition.x}% ${mousePosition.y}%,
-              #ff0080, #ff8c00, #ffff00, #00ff00, #00ffff, #0080ff, #8000ff, #ff0080)`,
-            WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-            WebkitMaskComposite: 'xor',
-            maskComposite: 'exclude',
-            padding: '2px',
           }}
         />
 
@@ -96,9 +100,9 @@ export function BadgeCard({ badge }: { badge: CityBadge }) {
             )}
             <div className="absolute inset-0 z-20 pointer-events-none transition-opacity duration-300"
               style={{
-                opacity: isHovered ? 0.3 : 0,
-                background: `linear-gradient(${mousePosition.x * 3.6}deg,
-                  rgba(255,0,255,0.3), rgba(0,255,255,0.3), rgba(255,255,0,0.3))`,
+                opacity: isHovered ? 0.4 : 0,
+                background: `radial-gradient(circle at ${mousePosition.x}% ${mousePosition.y}%,
+                  rgba(200,100,255,0.45) 0%, rgba(80,220,255,0.3) 40%, transparent 70%)`,
                 mixBlendMode: 'overlay',
               }}
             />

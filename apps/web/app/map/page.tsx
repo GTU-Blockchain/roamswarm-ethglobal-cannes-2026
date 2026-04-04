@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { UnlockModal } from '@/components/UnlockModal';
@@ -27,6 +28,7 @@ const MOCK_POINTS = 120n;
 const IS_DEV = process.env.NODE_ENV === 'development';
 
 export default function MapPage() {
+  const router = useRouter();
   const [activePoi, setActivePoi] = useState<POI | null>(null);
   const [ownedPoiIds, setOwnedPoiIds] = useState<string[]>([]);
   const [devPoiIndex, setDevPoiIndex] = useState(0);
@@ -41,10 +43,11 @@ export default function MapPage() {
     if (poi && !ownedPoiIds.includes(poiId)) setActivePoi(poi);
   }
 
-  // Dev: simulate unlocking current POI
+  // Dev: simulate unlocking current POI — bypass payment, go straight to experience
   function devSimulateUnlock() {
     const poi = pois[devPoiIndex % pois.length];
-    setActivePoi(poi);
+    setDevPoiIndex((i) => i + 1);
+    router.push(`/experience/${poi.id}?unlocked=1`);
   }
 
   function devMarkOwned(poiId: string) {

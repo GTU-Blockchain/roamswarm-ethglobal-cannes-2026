@@ -78,6 +78,7 @@ export default function MapView({ pois, ownedPoiIds = [], onPoiTrigger }: MapVie
           className: '',
         });
 
+        const contributeUrl = `/contribute?lat=${poi.lat}&lng=${poi.lng}&name=${encodeURIComponent(poi.name)}`;
         const popupContent = `
           <div style="background:#12121A;border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:14px;min-width:170px;color:white;font-family:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.6)">
             <p style="font-weight:700;font-size:13px;margin:0 0 3px">${poi.name}</p>
@@ -90,6 +91,9 @@ export default function MapView({ pois, ownedPoiIds = [], onPoiTrigger }: MapVie
                 </button>`
               : ''
             }
+            <button onclick="window.location.href='${contributeUrl}'" style="width:100%;margin-top:8px;padding:8px;border-radius:9px;background:rgba(168,85,247,0.15);color:rgba(168,85,247,1);font-weight:600;font-size:11px;border:1px solid rgba(168,85,247,0.35);cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity=0.75" onmouseout="this.style.opacity=1">
+              ✏️ Suggest edit / contribute
+            </button>
           </div>`;
 
         const marker = L.marker([poi.lat, poi.lng], { icon })
