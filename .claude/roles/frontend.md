@@ -22,9 +22,9 @@ Next.js 14 (App Router) · Tailwind CSS · TypeScript · Reown AppKit · Leaflet
 - [x] `components/UnlockModal.tsx` — Pay USDC / Redeem Points seçimi, glassmorphism
 
 ### Phase 3 — Payment + Experience
-- [ ] `components/PaymentGate.tsx` — x402 header inşası, tx status gösterimi
-- [ ] `apps/web/app/experience/[id]/page.tsx` — `/api/experience/[id]` fetch, loading state
-- [ ] `components/AudioPlayer.tsx` — 0G Storage stream, play/pause, waveform
+- [x] `components/PaymentGate.tsx` — x402 header inşası, tx status gösterimi
+- [x] `apps/web/app/experience/[id]/page.tsx` — `/api/experience/[id]` fetch, loading state
+- [x] `components/AudioPlayer.tsx` — 0G Storage stream, play/pause, waveform
 
 ### Phase 4 — Points + Gamification
 - [ ] `components/PointsBalance.tsx` — bakiye, günlük kazanım, "Free Unlock Available" state
