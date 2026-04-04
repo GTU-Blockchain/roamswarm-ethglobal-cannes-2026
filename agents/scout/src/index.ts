@@ -1,4 +1,4 @@
-// Scout Agent — scout.roam.eth
+// Scout Agent — scout.roamswarm.eth
 // ERC-8004 Identity: registered on Ethereum Sepolia Testnet
 // Fetches real-time venue data via Google Places API (CRE confidential HTTP layer)
 
@@ -22,7 +22,7 @@ app.use(express.json());
 
 const IDENTITY = {
   name: 'Scout Agent',
-  ens: 'scout.roam.eth',
+  ens: 'scout.roamswarm.eth',
   role: 'Fetches real-time venue data via Chainlink CRE + Google Places API',
   version: '0.1.0',
 };

@@ -1,4 +1,4 @@
-// Guide Agent — guide.roam.eth
+// Guide Agent — guide.roamswarm.eth
 // ERC-8004 Identity: registered on Ethereum Sepolia Testnet
 // TTS via ElevenLabs → upload to 0G Storage → return stream URL
 
@@ -18,7 +18,7 @@ app.use(express.json());
 
 const IDENTITY = {
   name: 'Guide Agent',
-  ens: 'guide.roam.eth',
+  ens: 'guide.roamswarm.eth',
   role: 'Text-to-speech narration via ElevenLabs TTS, stored on 0G Storage',
   version: '0.1.0',
 };

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const ORCHESTRATOR_URL = process.env.ORCHESTRATOR_URL || 'http://localhost:3001';
 
+// GET /api/experience/[id] — proxies to orchestrator
+// Add ?stream=true for SSE streaming (step-by-step progress)
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -9,13 +11,42 @@ export async function GET(
   const poiId = params.id;
   const lang = request.nextUrl.searchParams.get('lang') || 'en';
   const userId = request.nextUrl.searchParams.get('userId') || 'anonymous';
+  const stream = request.nextUrl.searchParams.get('stream') === 'true';
 
+  // SSE streaming mode — proxy SSE from orchestrator to client
+  if (stream) {
+    const upstreamUrl = `${ORCHESTRATOR_URL}/orchestrate/stream?poiId=${poiId}&lang=${lang}&userId=${userId}`;
+
+    try {
+      const upstream = await fetch(upstreamUrl, {
+        signal: AbortSignal.timeout(180000),
+      });
+
+      if (!upstream.ok || !upstream.body) {
+        return NextResponse.json({ error: 'Orchestrator stream unavailable' }, { status: 502 });
+      }
+
+      return new NextResponse(upstream.body, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
+  // Default: JSON response via POST /orchestrate
   try {
     const res = await fetch(`${ORCHESTRATOR_URL}/orchestrate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ poiId, userId, lang }),
-      signal: AbortSignal.timeout(180000), // 3 min max
+      signal: AbortSignal.timeout(180000),
     });
 
     if (!res.ok) {

@@ -1,11 +1,12 @@
-// Orchestrator Agent — orchestrator.roam.eth
+// Orchestrator Agent — orchestrator.roamswarm.eth
 // ERC-8004 Identity: registered on Ethereum Sepolia Testnet
-// Triggered by geofence event; coordinates Lore + Scout + Guide agents in parallel
+// Coordinates Lore + Scout + Guide agents, streams progress via SSE
 
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
+import type { Request, Response } from 'express';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,7 +17,7 @@ app.use(express.json());
 
 const IDENTITY = {
   name: 'Orchestrator Agent',
-  ens: 'orchestrator.roam.eth',
+  ens: 'orchestrator.roamswarm.eth',
   role: 'Coordinates Lore, Scout and Guide agents in parallel for POI experiences',
   version: '0.1.0',
 };
@@ -30,7 +31,7 @@ async function callLore(poiId: string, lang: string): Promise<string> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ poiId, lang }),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(90000),
   });
   if (!res.ok) throw new Error(`Lore agent error: ${res.status}`);
   const data = await res.json() as { story: string };
@@ -61,7 +62,7 @@ async function callGuide(story: string, lang: string, poiId: string): Promise<st
   return data.audioUrl;
 }
 
-// POST /orchestrate — main endpoint
+// POST /orchestrate — JSON response (for direct API calls)
 app.post('/orchestrate', async (req, res) => {
   const { poiId, userId = 'anonymous', lang = 'en' } = req.body;
 
@@ -74,32 +75,89 @@ app.post('/orchestrate', async (req, res) => {
   const startTime = Date.now();
 
   try {
-    // Step 1: Generate story (Lore) — needed before Guide can synthesize
-    console.log('[Orchestrator] Calling Lore agent...');
+    // Lore first (story needed for Guide)
     const story = await callLore(poiId, lang);
-    console.log('[Orchestrator] Lore done.');
 
-    // Step 2: Scout + Guide in parallel (Guide needs story, Scout is independent)
-    console.log('[Orchestrator] Calling Scout + Guide in parallel...');
+    // Scout + Guide in parallel
     const [venue, audioUrl] = await Promise.all([
-      callScout(poiId).catch((err) => {
-        console.warn('[Orchestrator] Scout failed, using fallback:', err.message);
+      callScout(poiId).catch((err: Error) => {
+        console.warn('[Orchestrator] Scout failed:', err.message);
         return { name: 'Nearby venue', isOpen: null, note: 'Venue data unavailable' };
       }),
-      callGuide(story, lang, poiId).catch((err) => {
-        console.warn('[Orchestrator] Guide failed, using fallback:', err.message);
+      callGuide(story, lang, poiId).catch((err: Error) => {
+        console.warn('[Orchestrator] Guide failed:', err.message);
         return '';
       }),
     ]);
 
     const elapsed = Date.now() - startTime;
     console.log(`[Orchestrator] Done in ${elapsed}ms`);
-
     res.json({ poiId, story, venue, audioUrl, elapsed });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[Orchestrator] Error:', message);
     res.status(500).json({ error: message });
+  }
+});
+
+// GET /orchestrate/stream — SSE streaming (step-by-step progress for frontend)
+app.get('/orchestrate/stream', async (req: Request, res: Response) => {
+  const { poiId, lang = 'en', userId = 'anonymous' } = req.query as Record<string, string>;
+
+  if (!poiId) {
+    res.status(400).json({ error: 'poiId is required' });
+    return;
+  }
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.flushHeaders();
+
+  const send = (event: string, data: unknown) => {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const startTime = Date.now();
+  console.log(`[Orchestrator/SSE] Starting ${poiId}`);
+
+  try {
+    // Step 1: Scout (fast, start immediately)
+    send('status', { step: 'scout', message: 'Finding nearby venues...' });
+    const venuePromise = callScout(poiId).catch((err: Error) => {
+      console.warn('[Orchestrator/SSE] Scout failed:', err.message);
+      return { name: 'Nearby venue', isOpen: null, note: 'Venue data unavailable' };
+    });
+
+    // Step 2: Lore (slow LLM)
+    send('status', { step: 'lore', message: 'Generating historical story via 0G Compute...' });
+    const story = await callLore(poiId, lang);
+    send('story', { story });
+
+    // Step 3: Venue result (should be done by now)
+    const venue = await venuePromise;
+    send('venue', { venue });
+
+    // Step 4: Guide (TTS + 0G Storage)
+    send('status', { step: 'guide', message: 'Synthesizing audio narration...' });
+    const audioUrl = await callGuide(story, lang, poiId).catch((err: Error) => {
+      console.warn('[Orchestrator/SSE] Guide failed:', err.message);
+      return '';
+    });
+    send('audio', { audioUrl });
+
+    const elapsed = Date.now() - startTime;
+    send('done', { poiId, story, venue, audioUrl, elapsed });
+    console.log(`[Orchestrator/SSE] Done in ${elapsed}ms`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[Orchestrator/SSE] Error:', message);
+    send('error', { error: message });
+  } finally {
+    res.end();
   }
 });
 

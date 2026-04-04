@@ -1,4 +1,4 @@
-// Lore Agent — lore.roam.eth
+// Lore Agent — lore.roamswarm.eth
 // ERC-8004 Identity: registered on Ethereum Sepolia Testnet
 // Runs LLM inference on 0G Compute to generate a POI history story
 
@@ -27,7 +27,7 @@ app.use(express.json());
 // ERC-8004 identity metadata
 const IDENTITY = {
   name: 'Lore Agent',
-  ens: 'lore.roam.eth',
+  ens: 'lore.roamswarm.eth',
   role: 'Generates hyper-local POI history stories via 0G Compute LLM inference',
   version: '0.1.0',
 };
