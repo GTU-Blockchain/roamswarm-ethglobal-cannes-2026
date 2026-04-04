@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Coins, Zap } from 'lucide-react';
+import { X, Coins, Zap, Loader2 } from 'lucide-react';
 import type { POI } from '@/lib/geofence';
 
 export interface UnlockModalProps {
@@ -11,13 +11,14 @@ export interface UnlockModalProps {
   onPayUSDC: () => void;
   onRedeemPoints: () => void;
   onClose: () => void;
+  isPending?: boolean;
 }
 
 const UNLOCK_THRESHOLD = 500n;
 const DAILY_RATE = 10n;
 const USDC_PRICE = '0.5';
 
-export function UnlockModal({ poi, pointsBalance, onPayUSDC, onRedeemPoints, onClose }: UnlockModalProps) {
+export function UnlockModal({ poi, pointsBalance, onPayUSDC, onRedeemPoints, onClose, isPending = false }: UnlockModalProps) {
   const canRedeem = pointsBalance >= UNLOCK_THRESHOLD;
   const pointsNeeded = canRedeem ? 0n : UNLOCK_THRESHOLD - pointsBalance;
 
@@ -96,6 +97,18 @@ export function UnlockModal({ poi, pointsBalance, onPayUSDC, onRedeemPoints, onC
                 >
                   <X className="w-4 h-4" />
                 </button>
+              </div>
+            )}
+
+            {/* Loading overlay */}
+            {isPending && (
+              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 rounded-t-3xl sm:rounded-3xl"
+                style={{ background: 'rgba(18,18,26,0.97)' }}>
+                <Loader2 className="w-10 h-10 text-roam-gold animate-spin" />
+                <div className="text-center">
+                  <p className="text-white font-semibold text-base">Confirming transaction…</p>
+                  <p className="text-white/40 text-sm mt-1">Waiting for blockchain confirmation</p>
+                </div>
               </div>
             )}
 

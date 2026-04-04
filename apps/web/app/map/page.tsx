@@ -58,7 +58,7 @@ export default function MapPage() {
 
   // On-chain: escrow lockPayment (ETH path)
   const { writeContract: writeLock, data: lockHash, isPending: isLocking } = useWriteContract();
-  const { isSuccess: lockSuccess } = useWaitForTransactionReceipt({ hash: lockHash });
+  const { isSuccess: lockSuccess, isLoading: isConfirming } = useWaitForTransactionReceipt({ hash: lockHash });
 
   // On-chain: redeemForUnlock (ROAM path)
   const { redeemForUnlock, isPending: isRedeeming, isSuccess: redeemSuccess } = useRedeemForUnlock();
@@ -181,6 +181,7 @@ export default function MapPage() {
           onPayUSDC={handlePayETH}
           onRedeemPoints={handleRedeemPoints}
           onClose={() => setActivePoi(null)}
+          isPending={isConfirming || isRedeeming}
         />
       )}
 
