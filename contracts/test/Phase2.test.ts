@@ -24,9 +24,14 @@ describe('Phase 2 — Core Contracts', () => {
   beforeEach(async () => {
     [owner, platform, contributor, user] = await ethers.getSigners();
 
-    splitter = await (await ethers.getContractFactory('CommissionSplitter')).deploy(platform.address);
-    escrow = await (await ethers.getContractFactory('RoamEscrow')).deploy(await splitter.getAddress());
-    registry = await (await ethers.getContractFactory('UserPOIRegistry')).deploy();
+    splitter  = await (await ethers.getContractFactory('CommissionSplitter')).deploy(platform.address);
+    registry  = await (await ethers.getContractFactory('UserPOIRegistry')).deploy();
+    escrow    = await (await ethers.getContractFactory('RoamEscrow')).deploy(
+      await splitter.getAddress(),
+      await registry.getAddress()
+    );
+    // Authorize escrow on UserPOIRegistry (mirrors production setup)
+    await registry.setAuthorized(await escrow.getAddress(), true);
   });
 
   // ─── CommissionSplitter ──────────────────────────────────────────────────────

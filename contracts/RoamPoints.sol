@@ -54,7 +54,11 @@ contract RoamPoints is ERC20 {
         revert("ROAM: non-transferable");
     }
 
-    function transferFrom(address, address, uint256) public pure override returns (bool) {
+    function transferFrom(
+        address,
+        address,
+        uint256
+    ) public pure override returns (bool) {
         revert("ROAM: non-transferable");
     }
 
@@ -64,12 +68,16 @@ contract RoamPoints is ERC20 {
     ///         Can only be called once per CLAIM_INTERVAL (24h) per user.
     function claimDailyPoints() external {
         uint256 last = lastClaimed[msg.sender];
+        uint256 amount;
+        uint256 ownedCount;
 
         // First-ever claim: mint 1 interval and start the clock
         if (last == 0) {
-            uint256 ownedCount = IUserPOIRegistry(poiRegistry).getUserPOICount(msg.sender);
+            ownedCount = IUserPOIRegistry(poiRegistry).getUserPOICount(
+                msg.sender
+            );
             require(ownedCount > 0, "ROAM: no owned POIs");
-            uint256 amount = ownedCount * POINTS_PER_POI_PER_DAY;
+            amount = ownedCount * POINTS_PER_POI_PER_DAY;
             lastClaimed[msg.sender] = block.timestamp;
             _mint(msg.sender, amount);
             emit PointsClaimed(msg.sender, amount);
@@ -79,12 +87,12 @@ contract RoamPoints is ERC20 {
         uint256 elapsed = block.timestamp - last;
         require(elapsed >= CLAIM_INTERVAL, "ROAM: claim too soon");
 
-        uint256 ownedCount = IUserPOIRegistry(poiRegistry).getUserPOICount(msg.sender);
+        ownedCount = IUserPOIRegistry(poiRegistry).getUserPOICount(msg.sender);
         require(ownedCount > 0, "ROAM: no owned POIs");
 
         // Credit proportional to full intervals elapsed (catch-up safe)
         uint256 intervals = elapsed / CLAIM_INTERVAL;
-        uint256 amount = intervals * ownedCount * POINTS_PER_POI_PER_DAY;
+        amount = intervals * ownedCount * POINTS_PER_POI_PER_DAY;
 
         lastClaimed[msg.sender] = block.timestamp;
         _mint(msg.sender, amount);
@@ -95,7 +103,9 @@ contract RoamPoints is ERC20 {
     /// @notice Returns how many points a user can claim right now (without reverting).
     function pendingPoints(address user) external view returns (uint256) {
         uint256 last = lastClaimed[user];
-        uint256 ownedCount = IUserPOIRegistry(poiRegistry).getUserPOICount(user);
+        uint256 ownedCount = IUserPOIRegistry(poiRegistry).getUserPOICount(
+            user
+        );
         if (ownedCount == 0) return 0;
 
         // First-ever claim: show 1 interval worth

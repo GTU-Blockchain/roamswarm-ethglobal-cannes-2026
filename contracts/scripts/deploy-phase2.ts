@@ -35,10 +35,10 @@ async function main() {
   const registryAddr = await userPOIRegistry.getAddress();
   console.log('    ✅ UserPOIRegistry:', registryAddr);
 
-  // 3. RoamEscrow (needs CommissionSplitter)
+  // 3. RoamEscrow (needs CommissionSplitter + UserPOIRegistry)
   console.log('3/4 Deploying RoamEscrow...');
   const RoamEscrow = await ethers.getContractFactory('RoamEscrow');
-  const roamEscrow = await RoamEscrow.deploy(splitterAddr);
+  const roamEscrow = await RoamEscrow.deploy(splitterAddr, registryAddr);
   await roamEscrow.waitForDeployment();
   const escrowAddr = await roamEscrow.getAddress();
   console.log('    ✅ RoamEscrow:', escrowAddr);
