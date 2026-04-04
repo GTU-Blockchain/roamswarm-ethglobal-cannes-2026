@@ -30,17 +30,68 @@ const MOCK_EXPERIENCES: Record<string, ExperienceResult> = {
   },
 };
 
+const ORCHESTRATOR_URL = process.env.ORCHESTRATOR_URL || 'http://localhost:3001';
+
+// GET /api/experience/[id] — proxies to orchestrator
+// Add ?stream=true for SSE streaming (step-by-step progress)
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const poiId = params.id;
+  const lang = request.nextUrl.searchParams.get('lang') || 'en';
+  const userId = request.nextUrl.searchParams.get('userId') || 'anonymous';
+  const stream = request.nextUrl.searchParams.get('stream') === 'true';
 
-  // TODO: call orchestrator agent at agents/orchestrator with { poiId, lang }
-  // The orchestrator fans out to history-agent, food-agent, voice-agent
-  // and returns the merged ExperienceResult
+  // SSE streaming mode — proxy SSE from orchestrator to client
+  if (stream) {
+    const upstreamUrl = `${ORCHESTRATOR_URL}/orchestrate/stream?poiId=${poiId}&lang=${lang}&userId=${userId}`;
 
-  const experience = MOCK_EXPERIENCES[poiId] || MOCK_EXPERIENCES['default'];
+    try {
+      const upstream = await fetch(upstreamUrl, {
+        signal: AbortSignal.timeout(180000),
+      });
 
-  return NextResponse.json(experience);
+      if (!upstream.ok || !upstream.body) {
+        return NextResponse.json({ error: 'Orchestrator stream unavailable' }, { status: 502 });
+      }
+
+      return new NextResponse(upstream.body, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
+  // Default: JSON response via POST /orchestrate
+  try {
+    const res = await fetch(`${ORCHESTRATOR_URL}/orchestrate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ poiId, userId, lang }),
+      signal: AbortSignal.timeout(180000),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      return NextResponse.json(
+        { error: `Orchestrator error: ${res.status} — ${err}` },
+        { status: 502 }
+      );
+    }
+
+    const data = await res.json();
+    return NextResponse.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[API /experience] Error:', message);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
