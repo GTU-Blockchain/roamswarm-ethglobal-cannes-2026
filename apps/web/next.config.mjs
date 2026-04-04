@@ -18,6 +18,7 @@ const nextConfig = {
       'porto/internal': false,
       'porto': false,
       '@metamask/connect-evm': false,
+      'prop-types': resolve(__dirname, '../../node_modules/prop-types'),
     };
     // pino-pretty is an optional dep of WalletConnect — not needed in browser
     config.resolve.fallback = { ...config.resolve.fallback, 'pino-pretty': false };

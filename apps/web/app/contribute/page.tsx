@@ -208,6 +208,7 @@ function ContributeContent() {
           [...unpackedProof] as [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint],
           subname,
         ],
+        gas: 800_000n,
       });
 
       setEnsName(`${subname}.contributors.roam.eth`);

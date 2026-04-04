@@ -20,5 +20,8 @@
   },
   "optionalDependencies": {
     "@esbuild/darwin-arm64": "^0.28.0"
+  },
+  "dependencies": {
+    "prop-types": "^15.8.1"
   }
 }
