@@ -24,10 +24,15 @@ contract RoamEscrow {
         bool refunded;
     }
 
+    // key = keccak256(poiId, payer) — each user has their own lock per POI
     mapping(bytes32 => Payment) public payments;
 
+    function _key(bytes32 poiId, address payer) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(poiId, payer));
+    }
+
     event PaymentLocked(bytes32 indexed poiId, address indexed payer, address contributor, uint256 amount);
-    event PaymentReleased(bytes32 indexed poiId, string audioUrl);
+    event PaymentReleased(bytes32 indexed poiId, address indexed payer, string audioUrl);
     event PaymentRefunded(bytes32 indexed poiId, address payer, uint256 amount);
 
     modifier onlyOwner() {
@@ -43,10 +48,11 @@ contract RoamEscrow {
 
     function lockPayment(bytes32 poiId, address contributor) external payable {
         require(msg.value > 0, "No payment");
-        require(payments[poiId].payer == address(0), "Already locked");
+        bytes32 k = _key(poiId, msg.sender);
+        require(payments[k].payer == address(0), "Already locked");
         require(contributor != address(0), "Invalid contributor");
 
-        payments[poiId] = Payment({
+        payments[k] = Payment({
             payer: msg.sender,
             contributor: contributor,
             amount: msg.value,
@@ -57,8 +63,9 @@ contract RoamEscrow {
         emit PaymentLocked(poiId, msg.sender, contributor, msg.value);
     }
 
-    function release(bytes32 poiId, string calldata audioUrl) external onlyOwner {
-        Payment storage p = payments[poiId];
+    function release(bytes32 poiId, address payer, string calldata audioUrl) external onlyOwner {
+        bytes32 k = _key(poiId, payer);
+        Payment storage p = payments[k];
         require(p.payer != address(0), "No payment");
         require(!p.released && !p.refunded, "Already settled");
         require(bytes(audioUrl).length > 0, "Empty audioUrl");
@@ -66,14 +73,14 @@ contract RoamEscrow {
         p.released = true;
         commissionSplitter.split{value: p.amount}(p.contributor);
 
-        // Record unlock so user's progress is tracked (points accrual + badge eligibility)
-        poiRegistry.recordUnlock(p.payer, poiId);
+        poiRegistry.recordUnlock(payer, poiId);
 
-        emit PaymentReleased(poiId, audioUrl);
+        emit PaymentReleased(poiId, payer, audioUrl);
     }
 
     function refund(bytes32 poiId) external {
-        Payment storage p = payments[poiId];
+        bytes32 k = _key(poiId, msg.sender);
+        Payment storage p = payments[k];
         require(p.payer == msg.sender, "Not payer");
         require(!p.released && !p.refunded, "Already settled");
 

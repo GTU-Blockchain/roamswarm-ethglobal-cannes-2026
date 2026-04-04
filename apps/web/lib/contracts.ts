@@ -270,6 +270,7 @@ export const RoamEscrowABI = [
     stateMutability: 'nonpayable',
     inputs: [
       { name: 'poiId',    type: 'bytes32' },
+      { name: 'payer',    type: 'address' },
       { name: 'audioUrl', type: 'string' },
     ],
     outputs: [],

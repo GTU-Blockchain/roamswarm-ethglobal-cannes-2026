@@ -99,6 +99,7 @@ export default function MapPage() {
       functionName: 'lockPayment',
       args:         [poiIdFromSlug(activePoi.id), FALLBACK_CONTRIBUTOR],
       value:        UNLOCK_PRICE_ETH,
+      gas:          300_000n,
     });
   }
 

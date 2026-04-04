@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http } from 'viem';
 import { sepolia } from 'viem/chains';
 import type { ExperienceResult } from '@/lib/agents';
-import { CONTRACTS, UserPOIRegistryABI, poiIdFromSlug } from '@/lib/contracts';
+import { keccak256, encodePacked } from 'viem';
+import { CONTRACTS, UserPOIRegistryABI, RoamEscrowABI, poiIdFromSlug } from '@/lib/contracts';
 
 // ─── Viem client for server-side on-chain reads ───────────────────────────────
 
@@ -52,20 +53,37 @@ export async function GET(
   const stream   = request.nextUrl.searchParams.get('stream')     === 'true';
   const userAddr = request.nextUrl.searchParams.get('userAddress');
 
-  // ── Auth check: verify POI is unlocked on-chain ──────────────────────────
+  // ── Auth check: verify POI is unlocked OR payment is locked in escrow ───
   if (userAddr && userAddr.startsWith('0x')) {
     try {
+      const poiBytes32 = poiIdFromSlug(poiId);
+      const addr = userAddr as `0x${string}`;
+
       const isUnlocked = await publicClient.readContract({
         address:      CONTRACTS.userPOIRegistry,
         abi:          UserPOIRegistryABI,
         functionName: 'unlockedPOIs',
-        args:         [userAddr as `0x${string}`, poiIdFromSlug(poiId)],
+        args:         [addr, poiBytes32],
       });
+
       if (!isUnlocked) {
-        return NextResponse.json({ error: 'POI not unlocked' }, { status: 403 });
+        // Also accept if payment is locked in escrow (release not yet called)
+        const escrowKey = keccak256(encodePacked(['bytes32', 'address'], [poiBytes32, addr]));
+        const payment = await publicClient.readContract({
+          address:      CONTRACTS.roamEscrow,
+          abi:          RoamEscrowABI,
+          functionName: 'payments',
+          args:         [escrowKey],
+        }) as [string, string, bigint, boolean, boolean];
+
+        const [payer, , , released, refunded] = payment;
+        const hasValidPayment = payer !== '0x0000000000000000000000000000000000000000' && !released && !refunded;
+
+        if (!hasValidPayment) {
+          return NextResponse.json({ error: 'POI not unlocked' }, { status: 403 });
+        }
       }
     } catch (err: unknown) {
-      // Chain read failed — log and continue (don't block the request)
       console.warn('[API /experience] Chain read failed, skipping auth check:', err);
     }
   }
