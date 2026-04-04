@@ -1,6 +1,6 @@
 // Scout Agent — scout.roamswarm.eth
 // ERC-8004 Identity: registered on Ethereum Sepolia Testnet
-// Fetches real-time venue data via Google Places API (CRE confidential HTTP layer)
+// Discovers nearby places via Google Places Nearby Search API
 
 import dotenv from 'dotenv';
 import path from 'path';
@@ -23,89 +23,101 @@ app.use(express.json());
 const IDENTITY = {
   name: 'Scout Agent',
   ens: 'scout.roamswarm.eth',
-  role: 'Fetches real-time venue data via Chainlink CRE + Google Places API',
-  version: '0.1.0',
+  role: 'Discovers nearby places via Google Places Nearby Search API',
+  version: '0.2.0',
 };
 
-interface VenueResult {
+const NEARBY_RADIUS_METERS = 500;
+const MAX_RESULTS = 5;
+
+interface NearbyPlace {
   name: string;
+  lat: number;
+  lng: number;
+  types: string[];
   isOpen: boolean | null;
   rating: number | null;
-  note: string;
-  source: string;
+  placeId: string;
 }
 
-async function fetchVenueData(poiName: string, lat: number, lng: number): Promise<VenueResult> {
+// Fallback mock data when no API key — offset coords from the POI location
+function mockNearbyPlaces(lat: number, lng: number): NearbyPlace[] {
+  const offsets = [
+    { dLat: 0.001,  dLng: 0.002,  name: 'Le Palais Brasserie',    types: ['restaurant', 'bar'] },
+    { dLat: -0.002, dLng: 0.001,  name: 'Café de la Croisette',   types: ['cafe', 'restaurant'] },
+    { dLat: 0.003,  dLng: -0.001, name: 'Musée de la Castre',     types: ['museum', 'tourist_attraction'] },
+    { dLat: -0.001, dLng: -0.003, name: 'Bar du Marché',          types: ['bar', 'food'] },
+    { dLat: 0.002,  dLng: 0.003,  name: 'Plage de la Bocca',      types: ['natural_feature', 'tourist_attraction'] },
+  ];
+
+  return offsets.map((o, i) => ({
+    name:    o.name,
+    lat:     Math.round((lat + o.dLat) * 1e6) / 1e6,
+    lng:     Math.round((lng + o.dLng) * 1e6) / 1e6,
+    types:   o.types,
+    isOpen:  Math.random() > 0.3,
+    rating:  Math.round((3.5 + Math.random() * 1.5) * 10) / 10,
+    placeId: `mock-place-${i + 1}`,
+  }));
+}
+
+async function fetchNearbyPlaces(
+  lat: number,
+  lng: number,
+): Promise<{ places: NearbyPlace[]; source: string }> {
   const apiKey = process.env.GOOGLE_PLACES_KEY;
 
   if (!apiKey) {
-    // Graceful fallback when key not set
-    const isOpen = Math.random() > 0.3; // ~70% açık
-    const rating = Math.round((3.5 + Math.random() * 1.5) * 10) / 10;
-    return {
-      name: poiName,
-      isOpen,
-      rating,
-      note: isOpen ? `Open now · Rating: ${rating} ⭐` : 'Currently closed',
-      source: 'fallback',
-    };
+    return { places: mockNearbyPlaces(lat, lng), source: 'fallback' };
   }
 
-  // Google Places Text Search (Legacy API — free tier, no extra enablement needed)
+  // Google Places Nearby Search (Legacy API) — no type filter → all place types
   const params = new URLSearchParams({
-    query:    `${poiName} Cannes France`,
     location: `${lat},${lng}`,
-    radius:   '200',
+    radius:   String(NEARBY_RADIUS_METERS),
     key:      apiKey,
+    keyword: 'restaurant|cafe|bar',
   });
-  const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params}`;
+  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params}`;
 
-  const searchRes = await fetch(searchUrl);
-
-  if (!searchRes.ok) {
-    const err = await searchRes.text();
-    throw new Error(`Google Places error: ${searchRes.status} — ${err}`);
+  const res = await fetch(url);
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Google Places Nearby Search error: ${res.status} — ${err}`);
   }
 
-  const data = await searchRes.json() as {
+  const data = await res.json() as {
     status: string;
     results?: {
+      place_id?: string;
       name?: string;
+      geometry?: { location: { lat: number; lng: number } };
+      types?: string[];
       opening_hours?: { open_now: boolean };
       rating?: number;
-      formatted_address?: string;
     }[];
   };
 
   if (data.status !== 'OK' || !data.results || data.results.length === 0) {
-    return {
-      name: poiName,
-      isOpen: null,
-      rating: null,
-      note: 'No venue data found in Google Places',
-      source: 'google-places-empty',
-    };
+    return { places: mockNearbyPlaces(lat, lng), source: 'google-places-empty' };
   }
 
-  const place = data.results[0];
-  const isOpen = place.opening_hours?.open_now ?? null;
-  const rating = place.rating ?? null;
-  const note = isOpen === true
-    ? `Open now · Rating: ${rating ?? 'N/A'} ⭐`
-    : isOpen === false
-    ? 'Currently closed'
-    : 'Opening hours unknown';
+  const places: NearbyPlace[] = data.results.slice(0, MAX_RESULTS).map((p) => ({
+    name:    p.name ?? 'Unknown Place',
+    lat:     p.geometry?.location.lat ?? lat,
+    lng:     p.geometry?.location.lng ?? lng,
+    types:   p.types ?? [],
+    isOpen:  p.opening_hours?.open_now ?? null,
+    rating:  p.rating ?? null,
+    placeId: p.place_id ?? '',
+  }));
 
-  return {
-    name: place.name ?? poiName,
-    isOpen,
-    rating,
-    note,
-    source: 'google-places-cre',
-  };
+  return { places, source: 'google-places-nearby' };
 }
 
-// POST /recommend — main endpoint
+// POST /recommend
+// Body:    { poiId: string }
+// Returns: { poiId, poiLat, poiLng, radiusMeters, source, places: NearbyPlace[] }
 app.post('/recommend', async (req, res) => {
   const { poiId } = req.body;
 
@@ -121,8 +133,15 @@ app.post('/recommend', async (req, res) => {
   }
 
   try {
-    const venue = await fetchVenueData(poi.name, poi.lat, poi.lng);
-    res.json({ poiId, lat: poi.lat, lng: poi.lng, ...venue });
+    const { places, source } = await fetchNearbyPlaces(poi.lat, poi.lng);
+    res.json({
+      poiId,
+      poiLat: poi.lat,
+      poiLng: poi.lng,
+      radiusMeters: NEARBY_RADIUS_METERS,
+      source,
+      places,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[Scout] Error:', message);
