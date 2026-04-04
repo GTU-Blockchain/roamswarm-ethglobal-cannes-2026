@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useAppKit } from '@reown/appkit/react';
 import { useAccount } from 'wagmi';
 
@@ -11,8 +12,10 @@ interface ConnectButtonProps {
 export function ConnectButton({ variant = 'outline', className }: ConnectButtonProps) {
   const { open } = useAppKit();
   const { address, isConnected } = useAccount();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  const label = isConnected
+  const label = mounted && isConnected
     ? `${address?.slice(0, 6)}…${address?.slice(-4)}`
     : 'Connect Wallet';
 
@@ -26,7 +29,7 @@ export function ConnectButton({ variant = 'outline', className }: ConnectButtonP
 
   return (
     <button onClick={() => open()} className={className ?? styles[variant]}>
-      {isConnected ? (
+      {mounted && isConnected ? (
         <span className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
           {label}

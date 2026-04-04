@@ -1,46 +1,73 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, MapPin, BookOpen, Utensils, Clock } from 'lucide-react';
+import { ArrowLeft, MapPin, BookOpen, Utensils, Clock, Radio } from 'lucide-react';
+import { useAppKitAccount } from '@reown/appkit/react';
 import { AudioPlayer } from '@/components/AudioPlayer';
 import { PaymentGate } from '@/components/PaymentGate';
-import { triggerExperience, type ExperienceResult } from '@/lib/agents';
+import { SwarmStatus } from '@/components/SwarmStatus';
+import { streamExperience, type ExperienceResult, type SSEProgress } from '@/lib/agents';
 
 type PageState = 'gate' | 'loading' | 'ready' | 'error';
 
+const STEP_LABELS: Record<string, string> = {
+  scout: '🔍 Scout finding nearby venues…',
+  lore:  '📜 Lore generating historical story via 0G Compute…',
+  guide: '🎙 Guide synthesizing audio narration…',
+};
+
 export default function ExperiencePage() {
-  const params = useParams();
-  const router = useRouter();
-  const poiId = params.id as string;
+  const params         = useParams();
+  const router         = useRouter();
+  const { address }    = useAppKitAccount();
+  const poiId          = params.id as string;
 
-  const [pageState, setPageState] = useState<PageState>('gate');
+  const [pageState, setPageState]   = useState<PageState>('gate');
   const [experience, setExperience] = useState<ExperienceResult | null>(null);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorMsg, setErrorMsg]     = useState('');
+  const [stepMsg, setStepMsg]       = useState('Connecting to agent swarm…');
+  const [partialStory, setPartial]  = useState<string | null>(null);
+  const cancelRef                   = useRef<(() => void) | null>(null);
 
-  // Auto-load if already unlocked (e.g. came via ROAM points)
-  // For now, always show gate first unless ?unlocked=1 in URL
+  // Auto-load if ?unlocked=1
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('unlocked') === '1') {
-        handlePaymentSuccess();
-      }
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.get('unlocked') === '1') startStream();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handlePaymentSuccess() {
+  // Cleanup stream on unmount
+  useEffect(() => () => { cancelRef.current?.(); }, []);
+
+  function startStream() {
     setPageState('loading');
-    try {
-      const result = await triggerExperience(poiId);
-      setExperience(result);
-      setPageState('ready');
-    } catch (err: any) {
-      setErrorMsg(err?.message ?? 'Failed to load experience');
-      setPageState('error');
-    }
+    setStepMsg('Connecting to agent swarm…');
+    setPartial(null);
+
+    const cancel = streamExperience(
+      poiId,
+      (progress: SSEProgress) => {
+        if (progress.message)  setStepMsg(STEP_LABELS[progress.step] ?? progress.message);
+        if (progress.story)    setPartial(progress.story);
+        if (progress.audioUrl !== undefined) setStepMsg('🎧 Audio ready — loading result…');
+      },
+      (result: ExperienceResult) => {
+        setExperience(result);
+        setPageState('ready');
+      },
+      (msg: string) => {
+        setErrorMsg(msg);
+        setPageState('error');
+      },
+      'en',
+      address ?? undefined
+    );
+
+    cancelRef.current = cancel;
   }
 
   return (
@@ -51,6 +78,7 @@ export default function ExperiencePage() {
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#F5A623] rounded-full opacity-10 blur-[120px] animate-pulse-glow" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500 rounded-full opacity-10 blur-[120px] animate-pulse-glow" style={{ animationDelay: '1.5s' }} />
       </div>
+
       {/* Header */}
       <div className="relative z-10 flex items-center gap-3 px-4 pt-safe-top pt-4 pb-3 border-b border-white/10">
         <button
@@ -95,37 +123,73 @@ export default function ExperiencePage() {
                   <span>🍽 Venue tip</span>
                 </div>
               </div>
-              <PaymentGate poiId={poiId} onSuccess={handlePaymentSuccess} />
+              <PaymentGate poiId={poiId} onSuccess={startStream} />
+              <SwarmStatus />
             </motion.div>
           )}
 
-          {/* Loading */}
+          {/* Loading — SSE step progress */}
           {pageState === 'loading' && (
             <motion.div
               key="loading"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="space-y-4 pt-4"
+              className="space-y-5 pt-4"
             >
-              {/* Skeleton cards */}
-              {[120, 180, 80].map((h, i) => (
-                <div
-                  key={i}
-                  className="glass rounded-2xl overflow-hidden"
-                  style={{ height: h }}
+              {/* Live step indicator */}
+              <div
+                className="flex items-center gap-3 px-4 py-3 rounded-2xl"
+                style={{ background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.2)' }}
+              >
+                <Radio size={16} className="text-roam-gold animate-pulse shrink-0" />
+                <p className="text-sm text-white/70 leading-snug">{stepMsg}</p>
+              </div>
+
+              {/* Agent swarm steps */}
+              <div className="space-y-2">
+                {[
+                  { key: 'scout', label: 'Scout',         icon: '🔍', desc: 'Finding nearby venues via Chainlink CRE' },
+                  { key: 'lore',  label: 'Lore',          icon: '📜', desc: 'Generating story via 0G Compute' },
+                  { key: 'guide', label: 'Guide',         icon: '🎙', desc: 'Creating audio via ElevenLabs + 0G Storage' },
+                ].map(({ key, label, icon, desc }) => {
+                  const isActive = stepMsg.toLowerCase().includes(label.toLowerCase());
+                  return (
+                    <div
+                      key={key}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300"
+                      style={{
+                        background: isActive ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${isActive ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)'}`,
+                      }}
+                    >
+                      <span className="text-lg w-6 text-center shrink-0">{icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-white/80">{label}</p>
+                        <p className="text-xs text-white/40 truncate">{desc}</p>
+                      </div>
+                      {isActive && (
+                        <div className="w-4 h-4 border-2 border-roam-gold/40 border-t-roam-gold rounded-full animate-spin shrink-0" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Partial story preview */}
+              {partialStory && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="glass rounded-2xl p-4"
                 >
-                  <motion.div
-                    className="w-full h-full bg-gradient-to-r from-white/5 via-white/10 to-white/5"
-                    animate={{ x: ['-100%', '100%'] }}
-                    transition={{ duration: 1.4, repeat: Infinity, ease: 'linear', delay: i * 0.15 }}
-                    style={{ backgroundSize: '200% 100%' }}
-                  />
-                </div>
-              ))}
-              <p className="text-center text-sm text-white/40">
-                Agent swarm generating your experience…
-              </p>
+                  <div className="flex items-center gap-2 text-roam-gold mb-2">
+                    <BookOpen size={13} />
+                    <span className="text-xs font-semibold uppercase tracking-wider">Story Preview</span>
+                  </div>
+                  <p className="text-sm text-white/60 leading-relaxed line-clamp-4">{partialStory}</p>
+                </motion.div>
+              )}
             </motion.div>
           )}
 
@@ -194,10 +258,8 @@ export default function ExperiencePage() {
                     </span>
                   </div>
 
-                  {/* Community contributors */}
                   {experience.venue.suggestedBy && experience.venue.suggestedBy.length > 0 && (
                     <div className="flex items-center gap-2 pt-1 border-t border-white/20">
-                      {/* Avatar stack */}
                       <div className="flex -space-x-2">
                         {experience.venue.suggestedBy.slice(0, 3).map((person, i) => (
                           <div
@@ -211,9 +273,7 @@ export default function ExperiencePage() {
                       </div>
                       <p className="text-[11px] text-white/45 leading-tight">
                         Suggested by{' '}
-                        <span className="text-white/70 font-medium">
-                          {experience.venue.suggestedBy[0].name}
-                        </span>
+                        <span className="text-white/70 font-medium">{experience.venue.suggestedBy[0].name}</span>
                         {experience.venue.suggestedBy.length > 1 && (
                           <> + {experience.venue.suggestedBy.length - 1} more</>
                         )}
@@ -223,7 +283,7 @@ export default function ExperiencePage() {
                 </div>
               )}
 
-              {/* Footer credit */}
+              {/* Footer */}
               <p className="text-center text-[11px] text-white/25 pb-2">
                 Powered by 0G Compute · Chainlink CRE · ElevenLabs
               </p>

@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
 import { Card, CardContent } from '@/components/ui/card';
 import { BadgeCard } from '@/components/BadgeCard';
-import { getPointsBalance } from '@/lib/points';
+import { useRoamBalance } from '@/lib/points';
 import { getUserBadges, CityBadge } from '@/lib/badges';
 import { getContributorENS } from '@/lib/ens';
 
@@ -184,23 +184,27 @@ export default function ProfilePage() {
   const { open } = useAppKit();
   const { address, isConnected } = useAppKitAccount();
 
-  const [balance, setBalance]         = useState<bigint>(0n);
   const [badges, setBadges]           = useState<CityBadge[]>([]);
   const [ensName, setEnsName]         = useState<string | null>(null);
-  const [loading, setLoading]         = useState(true);
+  const [badgesLoading, setBadgesLoading] = useState(true);
   const [progress, setProgress]       = useState(0);
   const [cityIndex, setCityIndex]     = useState(0);
   const [selectedBadge, setSelected]  = useState<CityBadge | null>(null);
 
+  // On-chain balance via wagmi
+  const { data: balanceRaw, isLoading: balanceLoading } = useRoamBalance();
+  const balance = balanceRaw ?? 0n;
+  const loading = balanceLoading || badgesLoading;
+
   useEffect(() => {
-    if (!address) { setLoading(false); return; }
+    if (!address) { setBadgesLoading(false); return; }
     (async () => {
-      setLoading(true);
-      const [bal, userBadges, ens] = await Promise.all([
-        getPointsBalance(address), getUserBadges(address), getContributorENS(address),
+      setBadgesLoading(true);
+      const [userBadges, ens] = await Promise.all([
+        getUserBadges(address), getContributorENS(address),
       ]);
-      setBalance(bal); setBadges(userBadges); setEnsName(ens);
-      setLoading(false);
+      setBadges(userBadges); setEnsName(ens);
+      setBadgesLoading(false);
     })();
   }, [address]);
 

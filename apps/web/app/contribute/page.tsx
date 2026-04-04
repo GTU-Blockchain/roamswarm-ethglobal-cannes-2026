@@ -7,7 +7,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, MapPin, CheckCircle2, AlertCircle, Send } from 'lucide-react';
 import { IDKitWidget, VerificationLevel, type ISuccessResult } from '@worldcoin/idkit';
 import { useAppKitAccount } from '@reown/appkit/react';
+import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { decodeAbiParameters } from 'viem';
 import { Card, CardContent } from '@/components/ui/card';
+import { CONTRACTS, ContributorRegistryABI } from '@/lib/contracts';
 import poisData from '@/data/cannes-pois.json';
 import type { POI } from '@/lib/geofence';
 
@@ -139,6 +142,8 @@ function ContributeContent() {
   const [ensName, setEnsName] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const { writeContractAsync } = useWriteContract();
+
   const searchParams = useSearchParams();
 
   const [form, setForm] = useState<ContributionForm>({
@@ -177,27 +182,44 @@ function ContributeContent() {
   /* ── Submit ── */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.lat || !form.lng || !form.story) return;
+    if (!form.name || !form.lat || !form.lng || !form.story || !worldIdProof || !address) return;
 
     setStep('submitting');
     setErrorMsg(null);
 
     try {
-      // TODO: call ContributorRegistry.register() with form + worldIdProof on Ethereum Mainnet
-      // Stub: simulate a 1.5s tx
-      await new Promise(r => setTimeout(r, 1500));
+      // Decode World ID packed proof → uint256[8]
+      const unpackedProof = decodeAbiParameters(
+        [{ type: 'uint256[8]' }],
+        worldIdProof.proof as `0x${string}`
+      )[0] as readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
 
-      // Mock ENS subname assignment
-      const stub = form.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      setEnsName(`${stub}.contributors.roam.eth`);
+      // Derive ENS subname from place name
+      const subname = form.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+
+      await writeContractAsync({
+        address:      CONTRACTS.contributorRegistry,
+        abi:          ContributorRegistryABI,
+        functionName: 'register',
+        args: [
+          address as `0x${string}`,
+          BigInt(worldIdProof.merkle_root),
+          BigInt(worldIdProof.nullifier_hash),
+          [...unpackedProof] as [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint],
+          subname,
+        ],
+      });
+
+      setEnsName(`${subname}.contributors.roam.eth`);
       setStep('success');
-    } catch {
-      setErrorMsg('Transaction failed. Please try again.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Transaction failed. Please try again.';
+      setErrorMsg(msg.length > 120 ? msg.slice(0, 120) + '…' : msg);
       setStep('error');
     }
   };
 
-  const appId = (process.env.NEXT_PUBLIC_WORLDCOIN_APP_ID ?? 'app_staging_placeholder') as `app_${string}`;
+  const appId = (process.env.NEXT_PUBLIC_WORLDID_APP_ID ?? 'app_staging_placeholder') as `app_${string}`;
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
@@ -274,7 +296,7 @@ function ContributeContent() {
 
                   <IDKitWidget
                     app_id={appId}
-                    action="contribute-poi"
+                    action="register_contributor"
                     signal={address ?? 'anonymous'}
                     verification_level={VerificationLevel.Orb}
                     onSuccess={onWorldIdSuccess}

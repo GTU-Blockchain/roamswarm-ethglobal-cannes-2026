@@ -7,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import type { Request, Response } from 'express';
+import { ethers } from 'ethers';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,6 +26,31 @@ const IDENTITY = {
 const LORE_URL  = process.env.LORE_URL  || 'http://localhost:3002';
 const SCOUT_URL = process.env.SCOUT_URL || 'http://localhost:3003';
 const GUIDE_URL = process.env.GUIDE_URL || 'http://localhost:3004';
+
+// ─── Escrow release (called after agent delivers audioUrl) ────────────────────
+
+const ESCROW_ADDRESS = process.env.NEXT_PUBLIC_ESCROW_CONTRACT;
+const PRIVATE_KEY    = process.env.PRIVATE_KEY;
+const RPC_URL        = process.env.NEXT_PUBLIC_RPC_URL || process.env.SEPOLIA_RPC_URL || 'https://rpc.sepolia.org';
+
+const ESCROW_ABI = [
+  'function release(bytes32 poiId, string audioUrl) external',
+];
+
+async function releaseEscrow(poiSlug: string, audioUrl: string): Promise<void> {
+  if (!PRIVATE_KEY || !ESCROW_ADDRESS || !audioUrl) return;
+  try {
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const signer   = new ethers.Wallet(PRIVATE_KEY, provider);
+    const escrow   = new ethers.Contract(ESCROW_ADDRESS, ESCROW_ABI, signer);
+    const poiId    = ethers.keccak256(ethers.toUtf8Bytes(poiSlug));
+    const tx       = await (escrow.release as (poiId: string, audioUrl: string) => Promise<ethers.TransactionResponse>)(poiId, audioUrl);
+    console.log(`[Orchestrator] Escrow released for ${poiSlug}: ${tx.hash}`);
+  } catch (err: unknown) {
+    // Non-fatal: escrow may not have a payment locked (dev mode)
+    console.warn('[Orchestrator] Escrow release skipped:', err instanceof Error ? err.message : err);
+  }
+}
 
 async function callLore(poiId: string, lang: string): Promise<string> {
   const res = await fetch(`${LORE_URL}/generate`, {
@@ -93,6 +119,9 @@ app.post('/orchestrate', async (req, res) => {
     const elapsed = Date.now() - startTime;
     console.log(`[Orchestrator] Done in ${elapsed}ms`);
     res.json({ poiId, story, venue, audioUrl, elapsed });
+
+    // Fire-and-forget: release escrow payment after delivering audioUrl
+    releaseEscrow(poiId, audioUrl).catch(() => {});
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[Orchestrator] Error:', message);
@@ -152,6 +181,9 @@ app.get('/orchestrate/stream', async (req: Request, res: Response) => {
     const elapsed = Date.now() - startTime;
     send('done', { poiId, story, venue, audioUrl, elapsed });
     console.log(`[Orchestrator/SSE] Done in ${elapsed}ms`);
+
+    // Fire-and-forget: release escrow after SSE delivery
+    releaseEscrow(poiId, audioUrl).catch(() => {});
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[Orchestrator/SSE] Error:', message);

@@ -1,21 +1,55 @@
-// ENS subname resolution + text records (Ethereum Mainnet)
+// ENS subname resolution — reads from ContributorRegistry on Sepolia
+// wagmi hooks for client components; async helper for server pages
+
+import { useReadContract, useAccount } from 'wagmi';
+import { CONTRACTS, ContributorRegistryABI } from './contracts';
 
 export const AGENT_ENS_NAMES = {
   orchestrator: 'orchestrator.roamswarm.eth',
-  history: 'lore.roamswarm.eth',
-  food: 'scout.roamswarm.eth',
-  voice: 'guide.roamswarm.eth',
+  history:      'lore.roamswarm.eth',
+  food:         'scout.roamswarm.eth',
+  voice:        'guide.roamswarm.eth',
 } as const;
 
-export async function getContributorENS(address: string): Promise<string | null> {
-  // TODO: resolve {id}.contributors.roam.eth subname for contributor
-  return null;
+// ─── Hook: get contributor ENS subname (client components) ───────────────────
+
+export function useContributorENS(): string | null {
+  const { address } = useAccount();
+  const { data } = useReadContract({
+    address:      CONTRACTS.contributorRegistry,
+    abi:          ContributorRegistryABI,
+    functionName: 'ensName',
+    args:         address ? [address] : undefined,
+    query:        { enabled: !!address },
+  });
+  if (!data || data === '') return null;
+  return `${data}.contributors.roam.eth`;
 }
 
-export async function setUserTextRecord(
-  node: string,
-  key: 'roamScore' | 'roamBadges' | 'roamPoints',
-  value: string
-): Promise<void> {
-  // TODO: write to ENS text record via ENS registry on Ethereum Mainnet
+// ─── Hook: is contributor verified? ─────────────────────────────────────────
+
+export function useIsContributorVerified() {
+  const { address } = useAccount();
+  return useReadContract({
+    address:      CONTRACTS.contributorRegistry,
+    abi:          ContributorRegistryABI,
+    functionName: 'isVerified',
+    args:         address ? [address] : undefined,
+    query:        { enabled: !!address },
+  });
+}
+
+// ─── Server-side helper (profile/page.tsx uses this) ─────────────────────────
+// Reads via fetch → /api/ens/[address] to avoid importing viem in client bundles
+
+export async function getContributorENS(address: string): Promise<string | null> {
+  if (!address || !address.startsWith('0x')) return null;
+  try {
+    const res = await fetch(`/api/ens/${address}`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const data = await res.json() as { ens: string | null };
+    return data.ens;
+  } catch {
+    return null;
+  }
 }
