@@ -15,12 +15,12 @@ interface IENSResolver {
 }
 
 /// @title ENSSubnameRegistry
-/// @notice Manages ENS subnames for contributors ({id}.contributors.roam.eth)
+/// @notice Manages ENS subnames for contributors ({id}.contributors.roamswarm.eth)
 ///         and stores reputation/points/badge data as ENS text records.
 contract ENSSubnameRegistry {
     IENSRegistry public immutable ensRegistry;
     IENSResolver public immutable ensResolver;
-    bytes32 public immutable roamNode; // namehash of roam.eth
+    bytes32 public immutable roamNode; // namehash of roamswarm.eth
 
     address public owner;
 
@@ -28,11 +28,20 @@ contract ENSSubnameRegistry {
     mapping(bytes32 => address) public nodeToAddress;
     mapping(address => string) public addressToLabel;
 
+    /// @notice Contracts allowed to call registerSubname (e.g. ContributorRegistry)
+    mapping(address => bool) public authorized;
+
     event SubnameRegistered(address indexed contributor, string label, bytes32 node);
     event TextRecordSet(bytes32 indexed node, string key, string value);
+    event AuthorizedCaller(address indexed caller, bool status);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "ENSSubnameRegistry: not owner");
+        _;
+    }
+
+    modifier onlyAuthorized() {
+        require(authorized[msg.sender] || msg.sender == owner, "ENSSubnameRegistry: not authorized");
         _;
     }
 
@@ -45,10 +54,10 @@ contract ENSSubnameRegistry {
 
     // ─── Subname registration ─────────────────────────────────────────────────
 
-    /// @notice Register a subname under roam.eth for a contributor.
-    ///         Example: label="abc123" → abc123.roam.eth
-    ///         The contract must be the owner of roamNode in the ENS registry.
-    function registerSubname(string calldata label, address contributor) external onlyOwner {
+    /// @notice Register a subname under roamswarm.eth for a contributor.
+    ///         Example: label="alice" → alice.roamswarm.eth
+    ///         Callable by owner OR authorized contracts (e.g. ContributorRegistry).
+    function registerSubname(string calldata label, address contributor) external onlyAuthorized {
         require(contributor != address(0), "ENSSubnameRegistry: zero address");
         require(addressToNode[contributor] == bytes32(0), "ENSSubnameRegistry: already registered");
 
@@ -95,6 +104,19 @@ contract ENSSubnameRegistry {
         bytes32 node = addressToNode[contributor];
         require(node != bytes32(0), "ENSSubnameRegistry: not registered");
         this.setText(node, "roamBadges", badges);
+    }
+
+    // ─── Access control ───────────────────────────────────────────────────────
+
+    /// @notice Grant or revoke registerSubname permission to a contract (e.g. ContributorRegistry)
+    function setAuthorized(address caller, bool status) external onlyOwner {
+        authorized[caller] = status;
+        emit AuthorizedCaller(caller, status);
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "ENSSubnameRegistry: zero address");
+        owner = newOwner;
     }
 
     // ─── Views ────────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@
 ## Changelog v2.1
 - **Agent Names:** history-agent → `lore`, food-agent → `scout`, voice-agent → `guide`
 - **Repo Structure:** Chainlink CRE Workflow moved to `integrations/chainlink-cre/` (not an agent)
-- **ENS:** Updated agent subnames to `lore.roam.eth`, `scout.roam.eth`, `guide.roam.eth`
+- **ENS:** Updated agent subnames to `lore.roamswarm.eth`, `scout.roamswarm.eth`, `guide.roamswarm.eth`
 
 ## Changelog v2.0
 - **Chain:** Arc removed → All contracts deployed on **Ethereum Mainnet**
@@ -95,7 +95,7 @@ Break-even:  Own 1 POI  → free unlock every 50 days
 
 ### 3.4 Local Contributor Flow
 1. Verify identity via World ID 4.0 ZK proof (human, not bot)
-2. Receive ENS subname: `{id}.contributors.roam.eth`
+2. Receive ENS subname: `{id}.contributors.roamswarm.eth`
 3. Submit content: street story, venue tip, local secret — linked to GPS coordinates
 4. Every time a tourist unlocks that content (USDC or points) → automatic commission via `CommissionSplitter.sol`
 5. Reputation score stored in ENS text records; higher quality = more visibility
@@ -187,10 +187,10 @@ All agents are built with the OpenClaw framework, running inference on 0G Comput
 
 | Agent | ENS | Responsibility |
 |---|---|---|
-| Orchestrator | `orchestrator.roam.eth` | Triggered by geofence, coordinates swarm |
-| Lore | `lore.roam.eth` | LLM inference on 0G Compute, generates story |
-| Scout | `scout.roam.eth` | Calls Chainlink CRE Workflow, returns venue |
-| Guide | `guide.roam.eth` | TTS generation, uploads to 0G Storage, returns stream URL |
+| Orchestrator | `orchestrator.roamswarm.eth` | Triggered by geofence, coordinates swarm |
+| Lore | `lore.roamswarm.eth` | LLM inference on 0G Compute, generates story |
+| Scout | `scout.roamswarm.eth` | Calls Chainlink CRE Workflow, returns venue |
+| Guide | `guide.roamswarm.eth` | TTS generation, uploads to 0G Storage, returns stream URL |
 
 **Orchestrator flow:**
 ```typescript
@@ -333,8 +333,8 @@ IWorldID(WORLD_ID_MAINNET_ADDRESS).verifyProof(root, groupId, signal, nullifierH
 
 **ENSv2 Subname Registry (Ethereum Mainnet):**
 ```typescript
-// Agent names: lore.roam.eth, scout.roam.eth, guide.roam.eth
-// Contributor names: {id}.contributors.roam.eth
+// Agent names: lore.roamswarm.eth, scout.roamswarm.eth, guide.roamswarm.eth
+// Contributor names: {id}.contributors.roamswarm.eth
 
 // Text records store reputation, points, and badge data:
 await ens.setText(userNode, 'roamScore', score.toString());
@@ -374,7 +374,7 @@ Points are non-transferable. Cannot be bought, bridged, or traded. Accrual is pa
     { "trait_type": "City", "value": "Cannes" },
     { "trait_type": "POIs Completed", "value": 12 },
     { "trait_type": "Completion Date", "value": "2026-04-05" },
-    { "trait_type": "Explorer ENS", "value": "umut.roam.eth" }
+    { "trait_type": "Explorer ENS", "value": "umut.roamswarm.eth" }
   ]
 }
 ```
@@ -676,7 +676,7 @@ TWENTY_FIRST_DEV_API_KEY=
        - Pre-minted "Cannes Explorer" badge (12/12 demo)
        - Badge: city artwork, completion date, ENS name
 
-[2:20] Switch to ENS tab: lore.roam.eth, scout.roam.eth, guide.roam.eth
+[2:20] Switch to ENS tab: lore.roamswarm.eth, scout.roamswarm.eth, guide.roamswarm.eth
        World ID tab: contributor ZK proof tx on Ethereum
        Etherscan: CommissionSplitter tx → contributor earned 0.1 USDC
 
@@ -714,7 +714,7 @@ TWENTY_FIRST_DEV_API_KEY=
 - [ ] World ID: on-chain `verifyProof` tx hash (Ethereum Sepolia/Mainnet)
 - [ ] 0G: OpenClaw agent repo + 0G Compute/Storage usage documented
 - [ ] Chainlink: CRE Workflow simulation output (`cre simulate` log)
-- [ ] ENS: subname registry tx hash, `lore.roam.eth` resolution
+- [ ] ENS: subname registry tx hash, `lore.roamswarm.eth` resolution
 - [ ] Points: `RoamPoints.sol` + `PointsRedeemer.sol` deployment addresses
 - [ ] City badge: `CityBadgeNFT.sol` deployment + minted token ID for demo wallet
 - [ ] Per-sponsor submission notes

@@ -6,9 +6,9 @@ import * as path from 'path';
 const ENS_REGISTRY = '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e';
 // Sepolia Public Resolver
 const ENS_RESOLVER = '0x8FADE66B79cC9f707aB26799354482EB93a5B7dD';
-// roam.eth node — we use a mock node for Sepolia (we don't own roam.eth on Sepolia)
+// roamswarm.eth node — we use a mock node for Sepolia (we don't own roamswarm.eth on Sepolia)
 // This is keccak256("cannes") in bytes32 for local tracking purposes
-const ROAM_NODE = ethers.keccak256(ethers.toUtf8Bytes('roam.eth'));
+const ROAM_NODE = ethers.keccak256(ethers.toUtf8Bytes('roamswarm.eth'));
 
 async function main() {
   const [deployer] = await ethers.getSigners();
@@ -83,9 +83,9 @@ async function main() {
     try {
       const tx = await ensSubnameRegistry.registerSubname(label, addr);
       await tx.wait();
-      console.log(`    ✅ ${label}.roam.eth → ${addr}`);
+      console.log(`    ✅ ${label}.roamswarm.eth → ${addr}`);
     } catch (e: any) {
-      console.log(`    ⚠️  ${label}.roam.eth skipped: ${e.message?.slice(0, 60)}`);
+      console.log(`    ⚠️  ${label}.roamswarm.eth skipped: ${e.message?.slice(0, 60)}`);
     }
   }
 

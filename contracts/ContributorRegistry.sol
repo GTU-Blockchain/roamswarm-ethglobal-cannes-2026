@@ -12,22 +12,46 @@ interface IWorldID {
     ) external view;
 }
 
+interface IENSSubnameRegistry {
+    function registerSubname(string calldata label, address contributor) external;
+}
+
 /// @title ContributorRegistry
-/// @notice Stores World ID 4.0 verified contributors + their ENS subnames
+/// @notice Stores World ID 4.0 verified contributors + their ENS subnames.
+///         On successful registration, automatically grants an ENS subname
+///         via ENSSubnameRegistry (if wired up).
 contract ContributorRegistry {
     IWorldID public immutable worldId;
     uint256 public immutable groupId = 1; // Orb-verified
     uint256 public immutable externalNullifier;
+
+    /// @notice Optional: auto-grant ENS subname on register. Set after deploy.
+    address public ensSubnameRegistry;
+    address public owner;
 
     mapping(address => bool) public verified;
     mapping(address => string) public ensName;
     mapping(uint256 => bool) public nullifierUsed; // prevent double-registration
 
     event ContributorRegistered(address indexed contributor, string ensSubname);
+    event ENSSubnameRegistrySet(address indexed registry);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "ContributorRegistry: not owner");
+        _;
+    }
 
     constructor(address _worldIdAddress, uint256 _externalNullifier) {
         worldId = IWorldID(_worldIdAddress);
         externalNullifier = _externalNullifier;
+        owner = msg.sender;
+    }
+
+    /// @notice Wire up ENSSubnameRegistry so contributors auto-receive subnames on register.
+    ///         ENSSubnameRegistry must have this contract set as authorized caller first.
+    function setENSSubnameRegistry(address _registry) external onlyOwner {
+        ensSubnameRegistry = _registry;
+        emit ENSSubnameRegistrySet(_registry);
     }
 
     /// @notice Register as a verified contributor via World ID ZK proof
@@ -62,6 +86,13 @@ contract ContributorRegistry {
         ensName[msg.sender] = ensSubname;
 
         emit ContributorRegistered(msg.sender, ensSubname);
+
+        // Auto-grant ENS subname if registry is wired up.
+        // Failure is non-blocking — contributor is still registered on-chain.
+        if (ensSubnameRegistry != address(0)) {
+            try IENSSubnameRegistry(ensSubnameRegistry).registerSubname(ensSubname, msg.sender) {}
+            catch {}
+        }
     }
 
     function isVerified(address contributor) external view returns (bool) {

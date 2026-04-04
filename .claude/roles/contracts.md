@@ -34,11 +34,11 @@ Hardhat · Solidity ^0.8.28 · OpenZeppelin · Ethereum Sepolia Testnet · World
 - [x] `scripts/deploy.ts` çalıştır — tüm adresleri `.env`'e yaz
 
 ### Phase 5 — Verify + Seed
-- [ ] `npx hardhat verify --network sepolia` — tüm kontratları Etherscan'da doğrula
-- [ ] World ID IDKit: Sepolia staging verifier adresini `.env`'e yaz (`NEXT_PUBLIC_WORLDID_ADDRESS`)
-- [ ] ENS subname'leri Sepolia'da kaydet: `lore.roam.eth`, `scout.roam.eth`, `guide.roam.eth`, `orchestrator.roam.eth`
-- [ ] Demo cüzdanını pre-seed et: 612 ROAM pts, 7 POI unlocked
-- [ ] Tüm contract adreslerini `.env`'e yaz, Person 1 ile paylaş
+- [x] `npx hardhat verify --network sepolia` — tüm kontratları Etherscan'da doğrula (`scripts/verify-all.ts`)
+- [x] World ID IDKit: Sepolia staging verifier adresini `.env`'e yaz (`NEXT_PUBLIC_WORLDID_ADDRESS=0x469449f251692e0779667583026b5a1e99512157`)
+- [ ] ENS subname'leri Sepolia'da kaydet: `lore.roamswarm.eth`, `scout.roamswarm.eth`, `guide.roamswarm.eth`, `orchestrator.roamswarm.eth` *(manuel — ENS App üzerinden)*
+- [x] Demo cüzdanını pre-seed et: 612 ROAM pts, 7 POI unlocked (`scripts/seed-demo-wallet.ts`)
+- [x] Tüm contract adreslerini `.env`'e yaz, Person 1 ile paylaş
 
 ## Notlar
 - Tüm kontratlar `contracts/` altında stub olarak hazır — TODO'ları implement et

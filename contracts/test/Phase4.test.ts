@@ -30,7 +30,7 @@ describe('Phase 4 — Badges, City, ENS', () => {
 
   const MOCK_ENS_REGISTRY = ethers.ZeroAddress;
   const MOCK_ENS_RESOLVER = ethers.ZeroAddress;
-  const MOCK_ROAM_NODE = ethers.keccak256(ethers.toUtf8Bytes('roam.eth'));
+  const MOCK_ROAM_NODE = ethers.keccak256(ethers.toUtf8Bytes('roamswarm.eth'));
 
   beforeEach(async () => {
     [owner, user, other] = await ethers.getSigners();

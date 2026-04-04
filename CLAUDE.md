@@ -29,10 +29,10 @@ When generating or editing any component, always ask: *"Does this work on a 375p
 
 | Agent | ENS | Role |
 |---|---|---|
-| Orchestrator | `orchestrator.roam.eth` | Coordinates the swarm |
-| Lore | `lore.roam.eth` | History storytelling via 0G Compute |
-| Scout | `scout.roam.eth` | Venue discovery via Chainlink CRE |
-| Guide | `guide.roam.eth` | TTS narration via ElevenLabs + 0G Storage |
+| Orchestrator | `orchestrator.roamswarm.eth` | Coordinates the swarm |
+| Lore | `lore.roamswarm.eth` | History storytelling via 0G Compute |
+| Scout | `scout.roamswarm.eth` | Venue discovery via Chainlink CRE |
+| Guide | `guide.roamswarm.eth` | TTS narration via ElevenLabs + 0G Storage |
 
 ## Key Constraints
 
