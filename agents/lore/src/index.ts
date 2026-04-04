@@ -8,7 +8,9 @@ import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import express from 'express';
 import { ethers } from 'ethers';
-import { createZGComputeNetworkBroker } from '@0glabs/0g-serving-broker';
+
+const require = createRequire(import.meta.url);
+const { createZGComputeNetworkBroker } = require('@0glabs/0g-serving-broker');
 
 // Load root .env (two levels up from agents/lore/src/)
 const __filename = fileURLToPath(import.meta.url);
@@ -16,7 +18,6 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 // Load POI data
-const require = createRequire(import.meta.url);
 const pois: { id: string; name: string; lat: number; lng: number }[] = require(
   path.resolve(__dirname, '../../../data/cannes-pois.json')
 );
