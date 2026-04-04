@@ -4,6 +4,7 @@ export interface VenueRecommendation {
   name: string;
   isOpen: boolean;
   note: string; // Chainlink CRE validated
+  suggestedBy?: { name: string; avatar?: string }[]; // community contributors
 }
 
 export interface ExperienceResult {

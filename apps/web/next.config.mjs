@@ -1,13 +1,21 @@
-import type { NextConfig } from 'next';
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   images: {
-    domains: ['ipfs.io', '0g.ai', 'gateway.0g.ai'],
+    domains: ['ipfs.io', '0g.ai', 'gateway.0g.ai', 'images.unsplash.com'],
+  },
+  webpack: (config) => {
+    // Optional deps of @wagmi/connectors not available in this build environment
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'porto/internal': false,
+      'porto': false,
+      '@metamask/connect-evm': false,
+    };
+    return config;
   },
   async headers() {
     return [
       {
-        // x402 payment headers — allow payment negotiation
         source: '/api/:path*',
         headers: [
           { key: 'Access-Control-Allow-Origin', value: '*' },

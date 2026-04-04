@@ -1,10 +1,10 @@
 // ENS subname resolution + text records (Ethereum Mainnet)
 
 export const AGENT_ENS_NAMES = {
-  orchestrator: 'orchestrator.roam.eth',
-  history: 'history.roam.eth',
-  food: 'food.roam.eth',
-  voice: 'voice.roam.eth',
+  orchestrator: 'orchestrator.roamswarm.eth',
+  history: 'lore.roamswarm.eth',
+  food: 'scout.roamswarm.eth',
+  voice: 'guide.roamswarm.eth',
 } as const;
 
 export async function getContributorENS(address: string): Promise<string | null> {
