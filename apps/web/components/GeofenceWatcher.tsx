@@ -6,16 +6,24 @@ import { watchGeofence } from '@/lib/geofence';
 
 export interface GeofenceWatcherProps {
   pois: POI[];
-  onTrigger: (poiId: string) => void;
+  onEnter: (poiId: string) => void;
+  onExit?: (poiId: string) => void;
 }
 
-export function GeofenceWatcher({ pois, onTrigger }: GeofenceWatcherProps) {
-  const onTriggerRef = useRef(onTrigger);
-  onTriggerRef.current = onTrigger;
+export function GeofenceWatcher({ pois, onEnter, onExit }: GeofenceWatcherProps) {
+  const onEnterRef = useRef(onEnter);
+  const onExitRef = useRef(onExit);
+  onEnterRef.current = onEnter;
+  onExitRef.current = onExit;
 
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
-    const stop = watchGeofence(pois, (poiId) => onTriggerRef.current(poiId));
+
+    const stop = watchGeofence(
+      pois,
+      (poiId) => onEnterRef.current(poiId),
+      (poiId) => onExitRef.current?.(poiId),
+    );
     return stop;
   }, [pois]);
 

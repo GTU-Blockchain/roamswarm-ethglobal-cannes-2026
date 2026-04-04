@@ -8,7 +8,7 @@ import { ArrowLeft, MapPin, CheckCircle2, AlertCircle, Send } from 'lucide-react
 import { IDKitWidget, VerificationLevel, type ISuccessResult } from '@worldcoin/idkit';
 import { useAppKitAccount } from '@reown/appkit/react';
 import { Card, CardContent } from '@/components/ui/card';
-import poisData from '../../../../data/cannes-pois.json';
+import poisData from '@/data/cannes-pois.json';
 import type { POI } from '@/lib/geofence';
 
 const pois = poisData as POI[];

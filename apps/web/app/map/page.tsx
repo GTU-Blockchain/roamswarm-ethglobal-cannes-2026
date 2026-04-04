@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { UnlockModal } from '@/components/UnlockModal';
-import poisData from '../../../../data/cannes-pois.json';
+import poisData from '@/data/cannes-pois.json';
 import type { POI } from '@/lib/geofence';
 
 // No SSR — Leaflet uses window
@@ -89,17 +89,28 @@ export default function MapPage() {
         onPoiTrigger={handlePoiTrigger}
       />
 
-      {/* Dev mode — test butonu */}
-      {IS_DEV && (
-        <div className="absolute bottom-20 right-4 z-[1000] flex flex-col gap-2">
+      {/* Bottom-right action column: dev tool (if any) + center button */}
+      <div className="absolute bottom-4 right-4 z-[1000] flex flex-col items-end gap-2">
+        {IS_DEV && (
           <button
             onClick={devSimulateUnlock}
             className="glass rounded-xl px-3 py-2 text-xs text-roam-gold font-semibold min-h-[44px] hover:bg-white/10 transition-colors"
           >
             🧪 Unlock POI {devPoiIndex + 1}/{pois.length}
           </button>
-        </div>
-      )}
+        )}
+        <button
+          onClick={() => (window as any).__roam_center_user?.()}
+          className="glass rounded-xl min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all"
+          title="Center on my location"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+            <circle cx="12" cy="12" r="8" strokeOpacity="0.3"/>
+          </svg>
+        </button>
+      </div>
 
       {/* Unlock Modal */}
       {activePoi && (

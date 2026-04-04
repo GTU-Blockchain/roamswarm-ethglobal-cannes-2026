@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import type { POI } from '@/lib/geofence';
-import { GeofenceWatcher } from './GeofenceWatcher';
+import { haversineDistance, GEOFENCE_RADIUS_METERS } from '@/lib/geofence';
 
 export interface MapViewProps {
   pois: POI[];
@@ -34,10 +34,50 @@ function makePinSvg(color: string, pulse: boolean): string {
   </svg>`;
 }
 
+function makeUserDotHtml(): string {
+  return `
+    <style>
+      @keyframes roam-pulse {
+        0%   { transform: scale(1);   opacity: 0.6; }
+        70%  { transform: scale(2.4); opacity: 0; }
+        100% { transform: scale(2.4); opacity: 0; }
+      }
+    </style>
+    <div style="position:relative;width:20px;height:20px;">
+      <div style="position:absolute;inset:0;border-radius:50%;background:#3b82f6;animation:roam-pulse 2s ease-out infinite;"></div>
+      <div style="position:absolute;inset:2px;border-radius:50%;background:#3b82f6;border:2.5px solid white;box-shadow:0 0 8px rgba(59,130,246,0.8);"></div>
+    </div>`;
+}
+
+function makePopupContent(poi: { id: string; name: string; lat: number; lng: number }, state: PoiState): string {
+  const contributeUrl = `/contribute?lat=${poi.lat}&lng=${poi.lng}&name=${encodeURIComponent(poi.name)}`;
+  const actionBtn =
+    state === 'available'
+      ? `<button onclick="window.__roam_poi_trigger('${poi.id}')" style="width:100%;padding:9px;border-radius:9px;background:#F5A623;color:#0A0A0F;font-weight:700;font-size:12px;border:none;cursor:pointer" onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">Unlock · 0.5 USDC</button>`
+      : state === 'owned'
+      ? `<button onclick="window.location.href='/experience/${poi.id}'" style="width:100%;padding:9px;border-radius:9px;background:#7C3AED;color:white;font-weight:700;font-size:12px;border:none;cursor:pointer" onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">▶ Open Experience</button>`
+      : `<p style="font-size:11px;color:rgba(255,255,255,0.3);text-align:center;padding:4px 0;margin:0">Get closer to unlock</p>`;
+
+  const statusText =
+    state === 'owned' ? '✅ Owned'
+    : state === 'available' ? '⚡ In range — unlock now'
+    : '🔒 Walk closer to unlock';
+
+  return `<div style="background:#12121A;border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:14px;min-width:170px;color:white;font-family:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.6)">
+    <p style="font-weight:700;font-size:13px;margin:0 0 3px">${poi.name}</p>
+    <p style="font-size:11px;color:rgba(255,255,255,0.45);margin:0 0 12px">${statusText}</p>
+    ${actionBtn}
+    <button onclick="window.location.href='${contributeUrl}'" style="width:100%;margin-top:8px;padding:8px;border-radius:9px;background:rgba(168,85,247,0.15);color:rgba(168,85,247,1);font-weight:600;font-size:11px;border:1px solid rgba(168,85,247,0.35);cursor:pointer" onmouseover="this.style.opacity=0.75" onmouseout="this.style.opacity=1">✏️ Suggest edit / contribute</button>
+  </div>`;
+}
+
 export default function MapView({ pois, ownedPoiIds = [], onPoiTrigger }: MapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<Record<string, any>>({});
+  const userMarkerRef = useRef<any>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const centeredRef = useRef(false);
   const [nearbyPoiIds, setNearbyPoiIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -78,23 +118,7 @@ export default function MapView({ pois, ownedPoiIds = [], onPoiTrigger }: MapVie
           className: '',
         });
 
-        const contributeUrl = `/contribute?lat=${poi.lat}&lng=${poi.lng}&name=${encodeURIComponent(poi.name)}`;
-        const popupContent = `
-          <div style="background:#12121A;border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:14px;min-width:170px;color:white;font-family:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.6)">
-            <p style="font-weight:700;font-size:13px;margin:0 0 3px">${poi.name}</p>
-            <p style="font-size:11px;color:rgba(255,255,255,0.45);margin:0 0 12px">
-              ${state === 'owned' ? '✅ Owned' : state === 'available' ? '⚡ In range — unlock now' : '🔒 Walk closer to unlock'}
-            </p>
-            ${state !== 'owned'
-              ? `<button onclick="window.__roam_poi_trigger('${poi.id}')" style="width:100%;padding:9px;border-radius:9px;background:#F5A623;color:#0A0A0F;font-weight:700;font-size:12px;border:none;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">
-                  Unlock · 0.5 USDC
-                </button>`
-              : ''
-            }
-            <button onclick="window.location.href='${contributeUrl}'" style="width:100%;margin-top:8px;padding:8px;border-radius:9px;background:rgba(168,85,247,0.15);color:rgba(168,85,247,1);font-weight:600;font-size:11px;border:1px solid rgba(168,85,247,0.35);cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity=0.75" onmouseout="this.style.opacity=1">
-              ✏️ Suggest edit / contribute
-            </button>
-          </div>`;
+        const popupContent = makePopupContent(poi, state);
 
         const marker = L.marker([poi.lat, poi.lng], { icon })
           .addTo(map)
@@ -105,24 +129,74 @@ export default function MapView({ pois, ownedPoiIds = [], onPoiTrigger }: MapVie
           });
 
         marker.on('click', () => {
-          if (state !== 'owned') onPoiTrigger?.(poi.id);
+          if (state === 'available') onPoiTrigger?.(poi.id);
+          else if (state === 'owned') window.location.href = `/experience/${poi.id}`;
+          // locked → popup açılır, içinde "Get closer" mesajı var
         });
 
         markersRef.current[poi.id] = { marker, poi };
       });
 
       mapInstanceRef.current = map;
+
+      // Single watchPosition — handles both blue dot + geofence
+      if (navigator.geolocation) {
+        const userIcon = L.divIcon({
+          html: makeUserDotHtml(),
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+          className: '',
+        });
+
+        const insidePois = new Set<string>();
+
+        watchIdRef.current = navigator.geolocation.watchPosition(
+          (pos) => {
+            const { latitude: lat, longitude: lng } = pos.coords;
+
+            // Update blue dot
+            if (!userMarkerRef.current) {
+              userMarkerRef.current = L.marker([lat, lng], { icon: userIcon, zIndexOffset: 99999, interactive: false }).addTo(map);
+            } else {
+              userMarkerRef.current.setLatLng([lat, lng]);
+            }
+            if (!centeredRef.current) {
+              map.setView([lat, lng], 16, { animate: true });
+              centeredRef.current = true;
+            }
+
+            // Geofence check
+            pois.forEach((poi) => {
+              const dist = haversineDistance(lat, lng, poi.lat, poi.lng);
+              const isNear = dist < GEOFENCE_RADIUS_METERS;
+              if (isNear && !insidePois.has(poi.id)) {
+                insidePois.add(poi.id);
+                setNearbyPoiIds((prev) => prev.includes(poi.id) ? prev : [...prev, poi.id]);
+              } else if (!isNear && insidePois.has(poi.id)) {
+                insidePois.delete(poi.id);
+                setNearbyPoiIds((prev) => prev.filter((id) => id !== poi.id));
+              }
+            });
+          },
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+        );
+      }
     });
 
     return () => {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
       mapInstanceRef.current?.remove();
       mapInstanceRef.current = null;
       markersRef.current = {};
+      userMarkerRef.current = null;
+      watchIdRef.current = null;
+      centeredRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-render marker icons when state changes
+  // Re-render marker icons + popup content when state changes
   useEffect(() => {
     if (!mapInstanceRef.current) return;
     import('leaflet').then((L) => {
@@ -137,6 +211,7 @@ export default function MapView({ pois, ownedPoiIds = [], onPoiTrigger }: MapVie
             className: '',
           })
         );
+        marker.setPopupContent(makePopupContent(poi, state));
       });
     });
   }, [ownedPoiIds, nearbyPoiIds]);
@@ -147,15 +222,21 @@ export default function MapView({ pois, ownedPoiIds = [], onPoiTrigger }: MapVie
     return () => { delete (window as any).__roam_poi_trigger; };
   }, [onPoiTrigger]);
 
-  function handleGeofenceTrigger(poiId: string) {
-    setNearbyPoiIds((prev) => prev.includes(poiId) ? prev : [...prev, poiId]);
-    onPoiTrigger?.(poiId);
-  }
+  // Expose centerOnUser globally so map/page.tsx can call it
+  useEffect(() => {
+    (window as any).__roam_center_user = () => {
+      const map = mapInstanceRef.current;
+      const marker = userMarkerRef.current;
+      if (!map || !marker) return;
+      map.setView(marker.getLatLng(), 16, { animate: true });
+    };
+    return () => { delete (window as any).__roam_center_user; };
+  }, []);
 
   return (
     <div className="relative w-full h-full" style={{ minHeight: '100dvh' }}>
       <div ref={mapRef} style={{ width: '100%', height: '100%', minHeight: '100dvh' }} />
-      <GeofenceWatcher pois={pois} onTrigger={handleGeofenceTrigger} />
+
       {/* Legend */}
       <div className="absolute bottom-4 left-4 z-[1000] glass rounded-xl px-3 py-2 flex items-center gap-3 text-xs text-white/60">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#4b5563]" />Locked</span>

@@ -39,6 +39,7 @@ Next.js 14 (App Router) · Tailwind CSS · TypeScript · Reown AppKit · Leaflet
 - [x] `apps/web/public/manifest.json` — PWA manifest, ikonlar
 - [ ] Vercel deploy + prod URL
 
+
 ### Phase 6 — Contribution Flow (eklendi)
 - [x] Map popup'a "Suggest edit / contribute" butonu — POI lat/lng/name ile contribute sayfasına yönlendir
 - [x] `contribute/page.tsx` — URL query params ile form pre-fill (lat, lng, name)
