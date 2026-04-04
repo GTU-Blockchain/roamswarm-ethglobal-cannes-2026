@@ -76,7 +76,7 @@ async function textToSpeech(text: string): Promise<Buffer> {
   return Buffer.from(arrayBuffer);
 }
 
-async function uploadTo0GStorage(audioBuffer: Buffer, poiId: string): Promise<string> {
+async function uploadTo0GStorage(audioBuffer: Buffer, _poiId: string): Promise<string> {
   const privateKey = process.env.PRIVATE_KEY;
   const rpcUrl = process.env.OG_RPC_URL || 'https://evmrpc-testnet.0g.ai';
   const indexerUrl = process.env.OG_STORAGE_INDEXER || 'https://indexer-storage-testnet-turbo.0g.ai';
@@ -87,20 +87,23 @@ async function uploadTo0GStorage(audioBuffer: Buffer, poiId: string): Promise<st
   const wallet = new ethers.Wallet(privateKey, provider);
   const indexer = new Indexer(indexerUrl);
 
-  // Use MemData — no disk write needed
   const memData = new MemData(audioBuffer);
 
   const [tree, treeErr] = await memData.merkleTree();
   if (treeErr !== null) throw new Error(`Merkle tree error: ${treeErr}`);
 
   const rootHash = tree!.rootHash();
+  const audioUrl = `${indexerUrl}/file?root=${rootHash}`;
   console.log('[Guide] 0G root hash:', rootHash);
 
-  const [, uploadErr] = await indexer.upload(memData, rpcUrl, wallet);
-  if (uploadErr !== null) throw new Error(`0G upload error: ${uploadErr}`);
+  // Start upload but don't wait for finalization — return URL immediately
+  // 0G finalization can take minutes; file is accessible once segments are uploaded
+  indexer.upload(memData, rpcUrl, wallet).then(([, err]) => {
+    if (err) console.warn('[Guide] 0G upload background error:', err);
+    else console.log('[Guide] 0G upload finalized:', audioUrl);
+  }).catch((e: unknown) => console.warn('[Guide] 0G upload exception:', e));
 
-  const audioUrl = `${indexerUrl}/file?root=${rootHash}`;
-  console.log('[Guide] Uploaded to 0G Storage:', audioUrl);
+  console.log('[Guide] Returning URL immediately (upload in background):', audioUrl);
   return audioUrl;
 }
 

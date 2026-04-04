@@ -5,11 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Trophy, Wallet, TrendingUp, X, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
-import { useReadContracts } from 'wagmi';
+import { useReadContracts, useReadContract } from 'wagmi';
 import { keccak256, encodePacked } from 'viem';
 import { Card, CardContent } from '@/components/ui/card';
 import { BadgeCard } from '@/components/BadgeCard';
-import { useRoamBalance } from '@/lib/points';
+import { useRoamBalance, useClaimDailyPoints, useLastClaimed, formatRoam } from '@/lib/points';
 import { useHasBadge, CityBadge } from '@/lib/badges';
 import { getContributorENS } from '@/lib/ens';
 import { CONTRACTS, UserPOIRegistryABI, RoamEscrowABI, poiIdFromSlug } from '@/lib/contracts';
@@ -180,8 +180,24 @@ export default function ProfilePage() {
   const [selectedBadge, setSelected] = useState<CityBadge | null>(null);
 
   // On-chain: ROAM balance
-  const { data: balanceRaw, isLoading: balanceLoading } = useRoamBalance();
+  const { data: balanceRaw, isLoading: balanceLoading, refetch: refetchBalance } = useRoamBalance();
   const balance = balanceRaw ?? 0n;
+
+  // On-chain: last claim timestamp — used to compute pending locally
+  const { data: lastClaimedRaw, refetch: refetchPending } = useLastClaimed();
+
+  // On-chain: registry POI count — only registry-recorded unlocks can claim (escrow-locked don't count until agent releases)
+  const { data: onChainPOICountRaw, refetch: refetchPOICount } = useReadContract({
+    address:      CONTRACTS.userPOIRegistry,
+    abi:          UserPOIRegistryABI,
+    functionName: 'getUserPOICount',
+    args:         address ? [address as `0x${string}`] : undefined,
+    query:        { enabled: !!address, refetchInterval: 15_000 },
+  });
+  const onChainPOICount = onChainPOICountRaw ? Number(onChainPOICountRaw as bigint) : 0;
+
+  // On-chain: daily claim
+  const { claimDailyPoints, isPending: isClaiming, isConfirming: isClaimConfirming, isSuccess: claimSuccess } = useClaimDailyPoints();
 
   // On-chain: badge for Cannes
   const { data: hasCannesBadge } = useHasBadge('cannes');
@@ -222,6 +238,26 @@ export default function ProfilePage() {
   const cannesUnlocked = ownedPOIs.length;
   const cannesProgress = Math.round((cannesUnlocked / TOTAL_CANNES_POIS) * 100);
 
+  // Compute pending points locally — cannesUnlocked includes escrow-locked POIs
+  // that haven't been released yet (getUserPOICount on-chain would return 0 for those)
+  const CLAIM_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  const POINTS_PER_POI    = 10;
+  const lastClaimedMs     = lastClaimedRaw ? Number(lastClaimedRaw as bigint) * 1000 : 0;
+  const nextClaimMs       = lastClaimedMs ? lastClaimedMs + CLAIM_INTERVAL_MS : 0;
+  const msUntilClaim      = Math.max(0, nextClaimMs - Date.now());
+  const hoursUntilClaim   = Math.floor(msUntilClaim / (1000 * 60 * 60));
+  const minsUntilClaim    = Math.floor((msUntilClaim % (1000 * 60 * 60)) / (1000 * 60));
+  const pendingNum = (() => {
+    if (onChainPOICount === 0) return 0;
+    if (lastClaimedMs === 0) return onChainPOICount * POINTS_PER_POI;
+    const elapsed  = Date.now() - lastClaimedMs;
+    if (elapsed < CLAIM_INTERVAL_MS) return 0;
+    const intervals = Math.floor(elapsed / CLAIM_INTERVAL_MS);
+    return intervals * onChainPOICount * POINTS_PER_POI;
+  })();
+  // Amount user will earn on next claim (shown even when not yet claimable)
+  const nextClaimAmount = onChainPOICount * POINTS_PER_POI;
+
   const displayBadges: CityBadge[] = hasCannesBadge
     ? [{ cityId: 'cannes', cityName: 'Cannes', completedAt: '', poiCount: TOTAL_CANNES_POIS, imageUri: 'https://images.unsplash.com/photo-1533856493584-0c6ca8ca9ce3?w=400&h=400&fit=crop' }]
     : [];
@@ -231,6 +267,15 @@ export default function ProfilePage() {
     if (!address) return;
     getContributorENS(address).then(setEnsName);
   }, [address]);
+
+  // Refetch after successful claim
+  useEffect(() => {
+    if (claimSuccess) {
+      refetchBalance();
+      refetchPending();
+      refetchPOICount();
+    }
+  }, [claimSuccess, refetchBalance, refetchPending, refetchPOICount]);
 
   // Animate progress ring
   useEffect(() => {
@@ -296,11 +341,13 @@ export default function ProfilePage() {
                       <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-black/40" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h1 className="text-xl font-bold text-white truncate">{ensName ?? 'explorer.eth'}</h1>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Wallet className="w-4 h-4 text-[#F5A623]" />
-                        <p className="text-xs text-gray-400 truncate font-mono">{truncAddr}</p>
-                      </div>
+                      <h1 className="text-xl font-bold text-white truncate">{ensName ?? truncAddr}</h1>
+                      {ensName && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <Wallet className="w-4 h-4 text-[#F5A623]" />
+                          <p className="text-xs text-gray-400 truncate font-mono">{truncAddr}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-3 pt-4 border-t border-white/10">
@@ -328,26 +375,53 @@ export default function ProfilePage() {
                 <CardContent className="p-6 space-y-6 relative z-10 h-full flex flex-col">
                   <div className="flex items-center justify-between">
                     <h2 className="text-sm font-medium text-gray-400">Total Points</h2>
-                    <div className="flex items-center gap-1.5 text-xs text-green-400 font-semibold">
-                      <TrendingUp className="w-3.5 h-3.5" /><span>+2.0%</span>
-                    </div>
+                    {pendingNum > 0 && (
+                      <div className="flex items-center gap-1.5 text-xs text-green-400 font-semibold">
+                        <TrendingUp className="w-3.5 h-3.5" /><span>+{pendingNum} ready</span>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-1 flex-1 flex flex-col justify-center">
                     <div className="text-5xl font-black text-white tracking-tight">
                       {loading ? '—' : balNum.toLocaleString()}
                     </div>
-                    <p className="text-sm text-gray-500">Secured on blockchain</p>
+                    
                   </div>
-                  <div className="flex items-center gap-3 pt-4 border-t border-white/10">
-                    <div className="flex-1">
-                      <div className="text-xs text-gray-500 mb-1">This Week</div>
-                      <div className="text-lg font-bold text-green-400">+250</div>
+                  <div className="pt-4 border-t border-white/10 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">Claimable</div>
+                        <div className={`text-lg font-bold ${pendingNum > 0 ? 'text-green-400' : 'text-white/60'}`}>
+                          {loading ? '…' : `+${pendingNum > 0 ? pendingNum : nextClaimAmount} ROAM`}
+                        </div>
+                      </div>
+                      <button
+                        onClick={claimDailyPoints}
+                        disabled={pendingNum === 0 || onChainPOICount === 0 || isClaiming || isClaimConfirming}
+                        className="px-4 py-2 rounded-xl text-sm font-semibold min-h-[44px] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
+                        style={{
+                          background: pendingNum > 0 && onChainPOICount > 0 ? 'linear-gradient(135deg,#F5A623,#ffd700)' : 'rgba(255,255,255,0.07)',
+                          color: pendingNum > 0 && onChainPOICount > 0 ? '#0A0A0F' : 'rgba(255,255,255,0.3)',
+                        }}
+                      >
+                        {isClaiming || isClaimConfirming ? (
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            Claiming…
+                          </span>
+                        ) : pendingNum > 0 ? 'Claim' : 'Claimed'}
+                      </button>
                     </div>
-                    <div className="h-10 w-px bg-white/10" />
-                    <div className="flex-1">
-                      <div className="text-xs text-gray-500 mb-1">Rank</div>
-                      <div className="text-lg font-bold text-[#F5A623]">#127</div>
-                    </div>
+                    {cannesUnlocked > 0 && onChainPOICount === 0 && (
+                      <p className="text-xs text-yellow-500/70">
+                        Waiting for agent to confirm POI delivery
+                      </p>
+                    )}
+                    {pendingNum === 0 && onChainPOICount > 0 && msUntilClaim > 0 && (
+                      <p className="text-xs text-white/30">
+                        Next in {hoursUntilClaim}h {minsUntilClaim}m
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>

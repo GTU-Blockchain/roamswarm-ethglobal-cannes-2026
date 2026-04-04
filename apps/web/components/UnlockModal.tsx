@@ -14,13 +14,13 @@ export interface UnlockModalProps {
   isPending?: boolean;
 }
 
-const UNLOCK_THRESHOLD = 500n;
-const DAILY_RATE = 10n;
+const UNLOCK_THRESHOLD_WEI = 500n * 10n ** 18n;
 const USDC_PRICE = '0.5';
 
 export function UnlockModal({ poi, pointsBalance, onPayUSDC, onRedeemPoints, onClose, isPending = false }: UnlockModalProps) {
-  const canRedeem = pointsBalance >= UNLOCK_THRESHOLD;
-  const pointsNeeded = canRedeem ? 0n : UNLOCK_THRESHOLD - pointsBalance;
+  const canRedeem = pointsBalance >= UNLOCK_THRESHOLD_WEI;
+  const balanceNum = Number(pointsBalance / 10n ** 18n);
+  const pointsNeeded = canRedeem ? 0n : (UNLOCK_THRESHOLD_WEI - pointsBalance) / 10n ** 18n;
 
   // Close on Escape
   useEffect(() => {
@@ -145,8 +145,8 @@ export function UnlockModal({ poi, pointsBalance, onPayUSDC, onRedeemPoints, onC
                   <span className="text-sm">ROAM Balance</span>
                 </div>
                 <div className="text-right">
-                  <p className="text-base font-bold text-white">{pointsBalance.toString()}</p>
-                  <p className="text-xs text-white/40">+{DAILY_RATE.toString()} pts/day per POI</p>
+                  <p className="text-base font-bold text-white">{balanceNum.toLocaleString()}</p>
+                  <p className="text-xs text-white/40">+10 pts/day per POI</p>
                 </div>
               </div>
 
@@ -176,7 +176,7 @@ export function UnlockModal({ poi, pointsBalance, onPayUSDC, onRedeemPoints, onC
                   }}
                 >
                   {canRedeem
-                    ? `Redeem ${UNLOCK_THRESHOLD.toString()} Points`
+                    ? `Redeem 500 Points`
                     : `Need ${pointsNeeded.toString()} more points`}
                 </button>
               </div>

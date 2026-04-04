@@ -6,7 +6,7 @@ export interface POI {
   image?: string;
 }
 
-export const GEOFENCE_RADIUS_METERS = 500;
+export const GEOFENCE_RADIUS_METERS = 5000;
 
 export function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
