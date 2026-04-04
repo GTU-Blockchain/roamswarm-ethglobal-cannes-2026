@@ -200,21 +200,7 @@ Press `Ctrl+C` to stop all agents. If one agent crashes, the rest stop automatic
 ### Agents — Separate Terminals (alternative)
 
 ```powershell
-# Terminal 1
-cd agents\lore && npm run dev
-# → Lore Agent (lore.roamswarm.eth) running on :3002
-
-# Terminal 2
-cd agents\scout && npm run dev
-# → Scout Agent (scout.roamswarm.eth) running on :3003
-
-# Terminal 3
-cd agents\guide && npm run dev
-# → Guide Agent (guide.roamswarm.eth) running on :3004
-
-# Terminal 4
-cd agents\orchestrator && npm run dev
-# → Orchestrator (orchestrator.roamswarm.eth) running on :3001
+npm run swarm
 ```
 
 ### Frontend (Dev 1 responsible)

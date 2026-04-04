@@ -16,6 +16,9 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 const app = express();
 app.use(express.json());
 
+// Memory Cache for Hackathon
+const audioCache = new Map<string, { audioUrl: string, storage: string, size: number }>();
+
 const IDENTITY = {
   name: 'Guide Agent',
   ens: 'guide.roamswarm.eth',
@@ -115,6 +118,14 @@ app.post('/synthesize', async (req, res) => {
     return;
   }
 
+  const cacheKey = `${poiId}-${lang}`;
+  if (audioCache.has(cacheKey)) {
+    console.log(`[Guide] Serving generated audio from memory cache for ${cacheKey}`);
+    const cachedData = audioCache.get(cacheKey);
+    res.json({ ...cachedData, poiId, lang });
+    return;
+  }
+
   try {
     // Step 1: TTS
     console.log('[Guide] Generating TTS for:', poiId);
@@ -135,6 +146,9 @@ app.post('/synthesize', async (req, res) => {
       audioUrl = `data:audio/mpeg;base64,${audioBuffer.toString('base64')}`;
       storage = 'base64-fallback';
     }
+
+    // Save to Cache
+    audioCache.set(cacheKey, { audioUrl, storage, size: audioBuffer.length });
 
     res.json({ audioUrl, storage, size: audioBuffer.length, poiId, lang });
   } catch (err: unknown) {
