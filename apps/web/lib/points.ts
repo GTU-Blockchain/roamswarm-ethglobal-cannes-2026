@@ -74,6 +74,7 @@ export function useClaimDailyPoints() {
       address:      CONTRACTS.roamPoints,
       abi:          RoamPointsABI,
       functionName: 'claimDailyPoints',
+      gas:          200_000n,
     });
   }
 

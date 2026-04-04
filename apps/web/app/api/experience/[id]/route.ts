@@ -90,7 +90,7 @@ export async function GET(
 
   // ── SSE streaming mode ────────────────────────────────────────────────────
   if (stream) {
-    const upstreamUrl = `${ORCHESTRATOR_URL}/orchestrate/stream?poiId=${poiId}&lang=${lang}&userId=${userId}`;
+    const upstreamUrl = `${ORCHESTRATOR_URL}/orchestrate/stream?poiId=${poiId}&lang=${lang}&userId=${userId}${userAddr ? `&userAddress=${userAddr}` : ''}`;
     try {
       const upstream = await fetch(upstreamUrl, { signal: AbortSignal.timeout(180_000) });
       if (!upstream.ok || !upstream.body) throw new Error(`Upstream ${upstream.status}`);
@@ -122,7 +122,7 @@ export async function GET(
     const res = await fetch(`${ORCHESTRATOR_URL}/orchestrate`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ poiId, userId, lang }),
+      body:    JSON.stringify({ poiId, userId, lang, userAddress: userAddr ?? '' }),
       signal:  AbortSignal.timeout(180_000),
     });
 

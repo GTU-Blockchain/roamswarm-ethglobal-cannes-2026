@@ -24,7 +24,7 @@ createAppKit({
   metadata: {
     name: 'Roam-Swarm',
     description: 'AI-Powered Urban Discovery Protocol',
-    url: 'https://roamswarm.xyz',
+    url: typeof window !== 'undefined' ? window.location.origin : 'https://roamswarm.xyz',
     icons: ['/icons/icon-192x192.png'],
   },
   features: {
