@@ -51,28 +51,16 @@ async function fetchVenueData(poiName: string, lat: number, lng: number): Promis
     };
   }
 
-  // Google Places Text Search (New API)
-  const searchUrl = `https://places.googleapis.com/v1/places:searchText`;
-  const searchBody = {
-    textQuery: `${poiName} Cannes France`,
-    locationBias: {
-      circle: {
-        center: { latitude: lat, longitude: lng },
-        radius: 200,
-      },
-    },
-    maxResultCount: 1,
-  };
-
-  const searchRes = await fetch(searchUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': 'places.displayName,places.currentOpeningHours,places.rating,places.formattedAddress',
-    },
-    body: JSON.stringify(searchBody),
+  // Google Places Text Search (Legacy API — free tier, no extra enablement needed)
+  const params = new URLSearchParams({
+    query:    `${poiName} Cannes France`,
+    location: `${lat},${lng}`,
+    radius:   '200',
+    key:      apiKey,
   });
+  const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params}`;
+
+  const searchRes = await fetch(searchUrl);
 
   if (!searchRes.ok) {
     const err = await searchRes.text();
@@ -80,15 +68,16 @@ async function fetchVenueData(poiName: string, lat: number, lng: number): Promis
   }
 
   const data = await searchRes.json() as {
-    places?: {
-      displayName?: { text: string };
-      currentOpeningHours?: { openNow: boolean };
+    status: string;
+    results?: {
+      name?: string;
+      opening_hours?: { open_now: boolean };
       rating?: number;
-      formattedAddress?: string;
+      formatted_address?: string;
     }[];
   };
 
-  if (!data.places || data.places.length === 0) {
+  if (data.status !== 'OK' || !data.results || data.results.length === 0) {
     return {
       name: poiName,
       isOpen: null,
@@ -98,8 +87,8 @@ async function fetchVenueData(poiName: string, lat: number, lng: number): Promis
     };
   }
 
-  const place = data.places[0];
-  const isOpen = place.currentOpeningHours?.openNow ?? null;
+  const place = data.results[0];
+  const isOpen = place.opening_hours?.open_now ?? null;
   const rating = place.rating ?? null;
   const note = isOpen === true
     ? `Open now · Rating: ${rating ?? 'N/A'} ⭐`
@@ -108,7 +97,7 @@ async function fetchVenueData(poiName: string, lat: number, lng: number): Promis
     : 'Opening hours unknown';
 
   return {
-    name: place.displayName?.text ?? poiName,
+    name: place.name ?? poiName,
     isOpen,
     rating,
     note,
