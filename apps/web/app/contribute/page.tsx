@@ -173,7 +173,7 @@ function ContributeContent() {
   const setField = (key: keyof ContributionForm) => (value: string) =>
     setForm(f => ({ ...f, [key]: value }));
 
-  /* ── World ID verified ── */
+  /* ── World ID widget success ── */
   const onWorldIdSuccess = (result: ISuccessResult) => {
     setWorldIdProof(result);
     setStep('form');

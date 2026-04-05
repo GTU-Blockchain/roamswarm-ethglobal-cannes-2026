@@ -52,14 +52,41 @@ async function getBroker() {
   return broker;
 }
 
-async function generateStory(poiName: string, lang: string): Promise<string> {
+interface ContributorStory {
+  address: string;
+  ensName?: string;
+  story: string;
+  tip?: string;
+}
+
+async function fetchContributorStories(poiId: string): Promise<ContributorStory[]> {
+  const webUrl = process.env.WEB_URL || 'http://localhost:3000';
+  try {
+    const res = await fetch(`${webUrl}/api/contribute?poiId=${poiId}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json() as { stories: ContributorStory[] };
+    return data.stories ?? [];
+  } catch {
+    return [];
+  }
+}
+
+async function generateStory(poiName: string, lang: string, contributions: ContributorStory[]): Promise<string> {
   const providerAddress = process.env.OG_PROVIDER_ADDRESS;
   if (!providerAddress) throw new Error('OG_PROVIDER_ADDRESS not set');
 
   const b = await getBroker();
   const { endpoint, model } = await b.inference.getServiceMetadata(providerAddress);
 
-  const prompt = `You are a passionate local historian and storyteller. In 3-4 sentences, tell the fascinating history and cultural significance of "${poiName}" in Cannes, France. Make it vivid and engaging for a tourist standing right there. Respond in ${lang === 'fr' ? 'French' : 'English'}.`;
+  const contributionSection = contributions.length > 0
+    ? `\n\nLocal community insights from verified contributors:\n${contributions.map((c, i) =>
+        `- ${c.ensName ?? c.address.slice(0, 8) + '…'}: "${c.story}"${c.tip ? ` Tip: "${c.tip}"` : ''}`
+      ).join('\n')}\n\nWeave these real local perspectives naturally into your story.`
+    : '';
+
+  const prompt = `You are a passionate local historian and storyteller. In 3-4 sentences, tell the fascinating history and cultural significance of "${poiName}" in Cannes, France. Make it vivid and engaging for a tourist standing right there. Respond in ${lang === 'fr' ? 'French' : 'English'}.${contributionSection}`;
 
   const headers = await b.inference.getRequestHeaders(providerAddress, prompt);
 
@@ -146,22 +173,26 @@ app.post('/generate', async (req, res) => {
     return;
   }
 
-  const cacheKey = `${poiId}-${lang}`;
-  if (storyCache.has(cacheKey)) {
-    console.log(`[Lore] Serving generated story from memory cache for ${cacheKey}`);
-    res.json({ poiId, poiName: pois.find((p) => p.id === poiId)?.name || poiId, lang, story: storyCache.get(cacheKey) });
-    return;
-  }
-
   const poi = pois.find((p) => p.id === poiId);
   if (!poi) {
     res.status(404).json({ error: `POI not found: ${poiId}` });
     return;
   }
 
+  // Fetch contributions first so we can include them in the cache key to auto-invalidate!
+  const contributions = await fetchContributorStories(poiId);
+  const cacheKey = `${poiId}-${lang}-${contributions.length}`;
+
+  if (storyCache.has(cacheKey)) {
+    console.log(`[Lore] Serving generated story from memory cache for ${cacheKey}`);
+    res.json({ poiId, poiName: poi.name, lang, story: storyCache.get(cacheKey) });
+    return;
+  }
+
+
   try {
-    console.log(`[Lore] Generating new story for ${poiId}`);
-    const story = await generateStory(poi.name, lang);
+    console.log(`[Lore] Generating new story for ${poiId} (Contributors: ${contributions.length})`);
+    const story = await generateStory(poi.name, lang, contributions);
     storyCache.set(cacheKey, story);
     res.json({ poiId, poiName: poi.name, lang, story });
   } catch (err: unknown) {

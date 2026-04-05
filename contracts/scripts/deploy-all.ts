@@ -16,9 +16,22 @@ const WORLD_ID_SEPOLIA  = '0x469449f251692e0779667583026b5a1e99512157';
 const ENS_REGISTRY      = '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e';
 const ENS_RESOLVER      = '0x8FADE66B79cC9f707aB26799354482EB93a5B7dD';
 const ROAM_NODE         = ethers.keccak256(ethers.toUtf8Bytes('roamswarm.eth'));
-const EXTERNAL_NULLIFIER = BigInt(
-  ethers.keccak256(ethers.toUtf8Bytes('app_roam_swarm_register_contributor'))
-);
+
+// External nullifier — must match exactly what IDKit sends to the World ID bridge.
+//
+// IDKit computes:  hashToField(packed(hashToField(appId), hashToField(action)))
+// where:           hashToField(x: string) = keccak256(utf8(x)) >> 8
+//                  hashToField(x: bytes)  = keccak256(x) >> 8
+//
+// appId  = process.env.NEXT_PUBLIC_WORLDID_APP_ID  ("app_64cc7693dcddbd90361336d0ef091ea6")
+// action = "register_contributor"   (matches <IDKitWidget action="register_contributor">)
+const _hashToField = (input: Uint8Array): bigint =>
+  BigInt(ethers.keccak256(input)) >> 8n;
+
+const _h1 = _hashToField(ethers.toUtf8Bytes('app_64cc7693dcddbd90361336d0ef091ea6'));
+const _h2 = _hashToField(ethers.toUtf8Bytes('register_contributor'));
+const _packed = ethers.getBytes(ethers.solidityPacked(['uint256', 'uint256'], [_h1, _h2]));
+const EXTERNAL_NULLIFIER = _hashToField(_packed);
 
 // ─── Env patch helper ─────────────────────────────────────────────────────────
 
@@ -59,6 +72,15 @@ async function main() {
     throw new Error('Balance too low — need at least 0.05 ETH on Sepolia');
   }
 
+  // ── MockWorldID (staging only — real on-chain World ID rejects simulator roots) ─
+  console.log('─── Staging setup ────────────────────────────');
+  console.log('  [0/1] MockWorldID (accepts any IDKit simulator proof)...');
+  const MockWorldID = await ethers.getContractFactory('MockWorldID');
+  const mockWorldId = await MockWorldID.deploy();
+  await mockWorldId.waitForDeployment();
+  const mockWorldIdAddr = await mockWorldId.getAddress();
+  console.log(`        ✅ MockWorldID: ${mockWorldIdAddr}\n`);
+
   // ── PHASE 2: Core contracts ─────────────────────────────────────────────────
   console.log('─── Phase 2: Core contracts ──────────────────');
 
@@ -83,9 +105,9 @@ async function main() {
   const escrowAddr = await roamEscrow.getAddress();
   console.log(`        ✅ ${escrowAddr}`);
 
-  console.log('  [4/4] ContributorRegistry...');
+  console.log('  [4/4] ContributorRegistry (with MockWorldID for staging)...');
   const ContributorRegistry = await ethers.getContractFactory('ContributorRegistry');
-  const contributorRegistry = await ContributorRegistry.deploy(WORLD_ID_SEPOLIA, EXTERNAL_NULLIFIER);
+  const contributorRegistry = await ContributorRegistry.deploy(mockWorldIdAddr, EXTERNAL_NULLIFIER);
   await contributorRegistry.waitForDeployment();
   const contributorAddr = await contributorRegistry.getAddress();
   console.log(`        ✅ ${contributorAddr}`);
