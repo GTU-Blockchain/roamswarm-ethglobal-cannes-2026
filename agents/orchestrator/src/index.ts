@@ -7,9 +7,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import type { Request, Response } from 'express';
+import { ethers } from 'ethers';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+// Load apps/web/.env first (has PRIVATE_KEY for escrow owner), then fall back to root .env
+dotenv.config({ path: path.resolve(__dirname, '../../../apps/web/.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 const app = express();
@@ -26,6 +29,31 @@ const LORE_URL  = process.env.LORE_URL  || 'http://localhost:3002';
 const SCOUT_URL = process.env.SCOUT_URL || 'http://localhost:3003';
 const GUIDE_URL = process.env.GUIDE_URL || 'http://localhost:3004';
 
+// ─── Escrow release (called after agent delivers audioUrl) ────────────────────
+
+const ESCROW_ADDRESS = process.env.NEXT_PUBLIC_ESCROW_CONTRACT;
+const PRIVATE_KEY    = process.env.PRIVATE_KEY;
+const RPC_URL        = process.env.NEXT_PUBLIC_RPC_URL || process.env.SEPOLIA_RPC_URL || 'https://rpc.sepolia.org';
+
+const ESCROW_ABI = [
+  'function release(bytes32 poiId, address payer, string calldata audioUrl) external',
+];
+
+async function releaseEscrow(poiSlug: string, payer: string, audioUrl: string): Promise<void> {
+  if (!PRIVATE_KEY || !ESCROW_ADDRESS || !audioUrl || !payer) return;
+  try {
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const signer   = new ethers.Wallet(PRIVATE_KEY, provider);
+    const escrow   = new ethers.Contract(ESCROW_ADDRESS, ESCROW_ABI, signer);
+    const poiId    = ethers.keccak256(ethers.toUtf8Bytes(poiSlug));
+    const tx       = await (escrow.release as (poiId: string, payer: string, audioUrl: string) => Promise<ethers.TransactionResponse>)(poiId, payer, audioUrl);
+    console.log(`[Orchestrator] Escrow released for ${poiSlug} (payer: ${payer}): ${tx.hash}`);
+  } catch (err: unknown) {
+    // Non-fatal: escrow may not have a payment locked (dev mode)
+    console.warn('[Orchestrator] Escrow release skipped:', err instanceof Error ? err.message : err);
+  }
+}
+
 async function callLore(poiId: string, lang: string): Promise<string> {
   const res = await fetch(`${LORE_URL}/generate`, {
     method: 'POST',
@@ -38,7 +66,15 @@ async function callLore(poiId: string, lang: string): Promise<string> {
   return data.story;
 }
 
-async function callScout(poiId: string): Promise<{ name: string; isOpen: boolean | null; note: string; lat: number; lng: number }> {
+interface VenueResult { name: string; isOpen: boolean | null; note: string; lat: number; lng: number }
+
+function placeToVenue(p: { name: string; isOpen: boolean | null; rating: number | null; lat: number; lng: number; types: string[] }): VenueResult {
+  const ratingNote = p.rating ? ` · ${p.rating}⭐` : '';
+  const typeLabel  = p.types?.[0]?.replace(/_/g, ' ') ?? 'venue';
+  return { name: p.name, isOpen: p.isOpen, note: `Nearby ${typeLabel}${ratingNote}`, lat: p.lat, lng: p.lng };
+}
+
+async function callScout(poiId: string): Promise<{ venue: VenueResult; venues: VenueResult[] }> {
   const res = await fetch(`${SCOUT_URL}/recommend`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -46,8 +82,14 @@ async function callScout(poiId: string): Promise<{ name: string; isOpen: boolean
     signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) throw new Error(`Scout agent error: ${res.status}`);
-  const data = await res.json() as { name: string; isOpen: boolean | null; note: string; lat: number; lng: number };
-  return { name: data.name, isOpen: data.isOpen, note: data.note, lat: data.lat, lng: data.lng };
+  const data = await res.json() as {
+    places: { name: string; isOpen: boolean | null; rating: number | null; lat: number; lng: number; types: string[] }[];
+  };
+  if (!data.places?.length) throw new Error('Scout returned no places');
+  // Sort by rating desc, pick highest as top venue
+  const sorted = [...data.places].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+  const venues = sorted.map(placeToVenue);
+  return { venue: venues[0], venues };
 }
 
 async function callGuide(story: string, lang: string, poiId: string): Promise<string> {
@@ -64,7 +106,7 @@ async function callGuide(story: string, lang: string, poiId: string): Promise<st
 
 // POST /orchestrate — JSON response (for direct API calls)
 app.post('/orchestrate', async (req, res) => {
-  const { poiId, userId = 'anonymous', lang = 'en' } = req.body;
+  const { poiId, userId = 'anonymous', lang = 'en', userAddress = '' } = req.body;
 
   if (!poiId) {
     res.status(400).json({ error: 'poiId is required' });
@@ -79,10 +121,11 @@ app.post('/orchestrate', async (req, res) => {
     const story = await callLore(poiId, lang);
 
     // Scout + Guide in parallel
-    const [venue, audioUrl] = await Promise.all([
+    const [scoutResult, audioUrl] = await Promise.all([
       callScout(poiId).catch((err: Error) => {
         console.warn('[Orchestrator] Scout failed:', err.message);
-        return { name: 'Nearby venue', isOpen: null, note: 'Venue data unavailable' };
+        const fallback = { name: 'Nearby venue', isOpen: null, note: 'Venue data unavailable', lat: 0, lng: 0 };
+        return { venue: fallback, venues: [fallback] };
       }),
       callGuide(story, lang, poiId).catch((err: Error) => {
         console.warn('[Orchestrator] Guide failed:', err.message);
@@ -92,7 +135,10 @@ app.post('/orchestrate', async (req, res) => {
 
     const elapsed = Date.now() - startTime;
     console.log(`[Orchestrator] Done in ${elapsed}ms`);
-    res.json({ poiId, story, venue, audioUrl, elapsed });
+    res.json({ poiId, story, venue: scoutResult.venue, venues: scoutResult.venues, audioUrl, elapsed });
+
+    // Fire-and-forget: release escrow payment after delivering audioUrl
+    releaseEscrow(poiId, userAddress, audioUrl).catch(() => {});
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[Orchestrator] Error:', message);
@@ -102,7 +148,7 @@ app.post('/orchestrate', async (req, res) => {
 
 // GET /orchestrate/stream — SSE streaming (step-by-step progress for frontend)
 app.get('/orchestrate/stream', async (req: Request, res: Response) => {
-  const { poiId, lang = 'en', userId = 'anonymous' } = req.query as Record<string, string>;
+  const { poiId, lang = 'en', userAddress = '' } = req.query as Record<string, string>;
 
   if (!poiId) {
     res.status(400).json({ error: 'poiId is required' });
@@ -127,9 +173,10 @@ app.get('/orchestrate/stream', async (req: Request, res: Response) => {
   try {
     // Step 1: Scout (fast, start immediately)
     send('status', { step: 'scout', message: 'Finding nearby venues...' });
-    const venuePromise = callScout(poiId).catch((err: Error) => {
+    const scoutPromise = callScout(poiId).catch((err: Error) => {
       console.warn('[Orchestrator/SSE] Scout failed:', err.message);
-      return { name: 'Nearby venue', isOpen: null, note: 'Venue data unavailable' };
+      const fallback = { name: 'Nearby venue', isOpen: null, note: 'Venue data unavailable', lat: 0, lng: 0 };
+      return { venue: fallback, venues: [fallback] };
     });
 
     // Step 2: Lore (slow LLM)
@@ -138,8 +185,8 @@ app.get('/orchestrate/stream', async (req: Request, res: Response) => {
     send('story', { story });
 
     // Step 3: Venue result (should be done by now)
-    const venue = await venuePromise;
-    send('venue', { venue });
+    const scoutResult = await scoutPromise;
+    send('venue', { venue: scoutResult.venue, venues: scoutResult.venues });
 
     // Step 4: Guide (TTS + 0G Storage)
     send('status', { step: 'guide', message: 'Synthesizing audio narration...' });
@@ -150,8 +197,11 @@ app.get('/orchestrate/stream', async (req: Request, res: Response) => {
     send('audio', { audioUrl });
 
     const elapsed = Date.now() - startTime;
-    send('done', { poiId, story, venue, audioUrl, elapsed });
+    send('done', { poiId, story, venue: scoutResult.venue, venues: scoutResult.venues, audioUrl, elapsed });
     console.log(`[Orchestrator/SSE] Done in ${elapsed}ms`);
+
+    // Fire-and-forget: release escrow after SSE delivery
+    releaseEscrow(poiId, userAddress, audioUrl).catch(() => {});
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[Orchestrator/SSE] Error:', message);

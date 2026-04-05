@@ -37,16 +37,19 @@ async function main() {
   await commissionSplitter.waitForDeployment();
   console.log('CommissionSplitter:', await commissionSplitter.getAddress());
 
-  // 6. RoamEscrow
+  // 6. RoamEscrow (needs CommissionSplitter + UserPOIRegistry)
   const RoamEscrow = await ethers.getContractFactory('RoamEscrow');
-  const roamEscrow = await RoamEscrow.deploy();
+  const roamEscrow = await RoamEscrow.deploy(
+    await commissionSplitter.getAddress(),
+    await userPOIRegistry.getAddress()
+  );
   await roamEscrow.waitForDeployment();
   console.log('RoamEscrow:', await roamEscrow.getAddress());
 
   // 7. ContributorRegistry (needs World ID address)
   const WORLD_ID_ADDRESS = process.env.WORLD_ID_ADDRESS || '0x469449f251692e0779667583026b5a1e99512157';
   const ContributorRegistry = await ethers.getContractFactory('ContributorRegistry');
-  const contributorRegistry = await ContributorRegistry.deploy(WORLD_ID_ADDRESS);
+  const contributorRegistry = await ContributorRegistry.deploy(WORLD_ID_ADDRESS, 0);
   await contributorRegistry.waitForDeployment();
   console.log('ContributorRegistry:', await contributorRegistry.getAddress());
 
@@ -62,8 +65,9 @@ async function main() {
 
   // 9. ENSSubnameRegistry
   const ENS_REGISTRY = process.env.ENS_REGISTRY || '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e';
+  const ENS_RESOLVER = process.env.ENS_RESOLVER || '0x8FADE66B79cC9f707aB26799354482EB93a5B7dD'; // Sepolia public resolver
   const ENSSubnameRegistry = await ethers.getContractFactory('ENSSubnameRegistry');
-  const ensSubnameRegistry = await ENSSubnameRegistry.deploy(ENS_REGISTRY, ethers.ZeroHash);
+  const ensSubnameRegistry = await ENSSubnameRegistry.deploy(ENS_REGISTRY, ENS_RESOLVER, ethers.ZeroHash);
   await ensSubnameRegistry.waitForDeployment();
   console.log('ENSSubnameRegistry:', await ensSubnameRegistry.getAddress());
 

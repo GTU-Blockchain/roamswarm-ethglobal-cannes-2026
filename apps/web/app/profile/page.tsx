@@ -2,14 +2,18 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Trophy, Wallet, TrendingUp, X, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
+import { MapPin, Trophy, Wallet, TrendingUp, X, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
+import { useReadContracts, useReadContract } from 'wagmi';
+import { keccak256, encodePacked } from 'viem';
 import { Card, CardContent } from '@/components/ui/card';
 import { BadgeCard } from '@/components/BadgeCard';
-import { getPointsBalance } from '@/lib/points';
-import { getUserBadges, CityBadge } from '@/lib/badges';
+import { useRoamBalance, useClaimDailyPoints, useLastClaimed, formatRoam } from '@/lib/points';
+import { useHasBadge, CityBadge } from '@/lib/badges';
 import { getContributorENS } from '@/lib/ens';
+import { CONTRACTS, UserPOIRegistryABI, RoamEscrowABI, poiIdFromSlug } from '@/lib/contracts';
+import poisData from '@/data/cannes-pois.json';
 
 /* ─── Static ambient background (matches landing page) ─── */
 function AmbientBackground() {
@@ -162,21 +166,8 @@ function CityBadgeCard({ badge, delay, onClick }: { badge: CityBadge; delay: num
   );
 }
 
-/* ─── Mock data ─── */
-interface OwnedPOI { id: string; name: string; discovered: string; }
-const MOCK_POIS: OwnedPOI[] = [
-  { id: '1', name: 'Palais des Festivals', discovered: '2 days ago' },
-  { id: '2', name: 'La Croisette',         discovered: '5 days ago' },
-  { id: '3', name: 'Marché Forville',      discovered: '1 week ago' },
-  { id: '4', name: 'Villa Rothschild',     discovered: '2 weeks ago' },
-];
-
-interface CityProgressData { id: string; name: string; unlocked: number; total: number; color: string; }
-const MOCK_CITIES: CityProgressData[] = [
-  { id: 'cannes', name: 'Cannes', unlocked: 4, total: 12, color: '#f093fb' },
-  { id: 'paris',  name: 'Paris',  unlocked: 8, total: 15, color: '#667eea' },
-  { id: 'nice',   name: 'Nice',   unlocked: 2, total: 10, color: '#4facfe' },
-];
+const ALL_POIS = poisData as { id: string; name: string }[];
+const TOTAL_CANNES_POIS = ALL_POIS.length; // 12
 
 /* ─── Main page ─── */
 export default function ProfilePage() {
@@ -184,43 +175,120 @@ export default function ProfilePage() {
   const { open } = useAppKit();
   const { address, isConnected } = useAppKitAccount();
 
-  const [balance, setBalance]         = useState<bigint>(0n);
-  const [badges, setBadges]           = useState<CityBadge[]>([]);
-  const [ensName, setEnsName]         = useState<string | null>(null);
-  const [loading, setLoading]         = useState(true);
-  const [progress, setProgress]       = useState(0);
-  const [cityIndex, setCityIndex]     = useState(0);
-  const [selectedBadge, setSelected]  = useState<CityBadge | null>(null);
+  const [ensName, setEnsName]        = useState<string | null>(null);
+  const [progress, setProgress]      = useState(0);
+  const [selectedBadge, setSelected] = useState<CityBadge | null>(null);
 
+  // On-chain: ROAM balance
+  const { data: balanceRaw, isLoading: balanceLoading, refetch: refetchBalance } = useRoamBalance();
+  const balance = balanceRaw ?? 0n;
+
+  // On-chain: last claim timestamp — used to compute pending locally
+  const { data: lastClaimedRaw, refetch: refetchPending } = useLastClaimed();
+
+  // On-chain: registry POI count — only registry-recorded unlocks can claim (escrow-locked don't count until agent releases)
+  const { data: onChainPOICountRaw, refetch: refetchPOICount } = useReadContract({
+    address:      CONTRACTS.userPOIRegistry,
+    abi:          UserPOIRegistryABI,
+    functionName: 'getUserPOICount',
+    args:         address ? [address as `0x${string}`] : undefined,
+    query:        { enabled: !!address, refetchInterval: 15_000 },
+  });
+  const onChainPOICount = onChainPOICountRaw ? Number(onChainPOICountRaw as bigint) : 0;
+
+  // On-chain: daily claim
+  const { claimDailyPoints, isPending: isClaiming, isConfirming: isClaimConfirming, isSuccess: claimSuccess } = useClaimDailyPoints();
+
+  // On-chain: badge for Cannes
+  const { data: hasCannesBadge } = useHasBadge('cannes');
+
+  // On-chain: batch-check all POIs (registry unlock + escrow locked payment)
+  const poiBytes32s = ALL_POIS.map((p) => poiIdFromSlug(p.id));
+  const escrowKeys = address
+    ? poiBytes32s.map((b) => keccak256(encodePacked(['bytes32', 'address'], [b, address as `0x${string}`])))
+    : [];
+
+  const { data: poiResults, isLoading: poisLoading } = useReadContracts({
+    contracts: [
+      ...ALL_POIS.map((p) => ({
+        address:      CONTRACTS.userPOIRegistry,
+        abi:          UserPOIRegistryABI,
+        functionName: 'unlockedPOIs' as const,
+        args:         [address as `0x${string}`, poiIdFromSlug(p.id)],
+      })),
+      ...escrowKeys.map((k) => ({
+        address:      CONTRACTS.roamEscrow,
+        abi:          RoamEscrowABI,
+        functionName: 'payments' as const,
+        args:         [k],
+      })),
+    ],
+    query: { enabled: !!address },
+  });
+
+  const n = ALL_POIS.length;
+  const ownedPOIs = poiResults
+    ? ALL_POIS.filter((_, i) => {
+        const isUnlocked = poiResults[i]?.result === true;
+        const pay = poiResults[n + i]?.result as [string, string, bigint, boolean, boolean] | undefined;
+        return isUnlocked || (pay ? pay[0] !== '0x0000000000000000000000000000000000000000' && !pay[3] && !pay[4] : false);
+      })
+    : [];
+
+  const cannesUnlocked = ownedPOIs.length;
+  const cannesProgress = Math.round((cannesUnlocked / TOTAL_CANNES_POIS) * 100);
+
+  // Compute pending points locally — cannesUnlocked includes escrow-locked POIs
+  // that haven't been released yet (getUserPOICount on-chain would return 0 for those)
+  const CLAIM_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  const POINTS_PER_POI    = 10;
+  const lastClaimedMs     = lastClaimedRaw ? Number(lastClaimedRaw as bigint) * 1000 : 0;
+  const nextClaimMs       = lastClaimedMs ? lastClaimedMs + CLAIM_INTERVAL_MS : 0;
+  const msUntilClaim      = Math.max(0, nextClaimMs - Date.now());
+  const hoursUntilClaim   = Math.floor(msUntilClaim / (1000 * 60 * 60));
+  const minsUntilClaim    = Math.floor((msUntilClaim % (1000 * 60 * 60)) / (1000 * 60));
+  const pendingNum = (() => {
+    if (onChainPOICount === 0) return 0;
+    if (lastClaimedMs === 0) return onChainPOICount * POINTS_PER_POI;
+    const elapsed  = Date.now() - lastClaimedMs;
+    if (elapsed < CLAIM_INTERVAL_MS) return 0;
+    const intervals = Math.floor(elapsed / CLAIM_INTERVAL_MS);
+    return intervals * onChainPOICount * POINTS_PER_POI;
+  })();
+  // Amount user will earn on next claim (shown even when not yet claimable)
+  const nextClaimAmount = onChainPOICount * POINTS_PER_POI;
+
+  const displayBadges: CityBadge[] = hasCannesBadge
+    ? [{ cityId: 'cannes', cityName: 'Cannes', completedAt: '', poiCount: TOTAL_CANNES_POIS, imageUri: 'https://images.unsplash.com/photo-1533856493584-0c6ca8ca9ce3?w=400&h=400&fit=crop' }]
+    : [];
+
+  // ENS name
   useEffect(() => {
-    if (!address) { setLoading(false); return; }
-    (async () => {
-      setLoading(true);
-      const [bal, userBadges, ens] = await Promise.all([
-        getPointsBalance(address), getUserBadges(address), getContributorENS(address),
-      ]);
-      setBalance(bal); setBadges(userBadges); setEnsName(ens);
-      setLoading(false);
-    })();
+    if (!address) return;
+    getContributorENS(address).then(setEnsName);
   }, [address]);
 
-  const activeCity = MOCK_CITIES[cityIndex];
+  // Refetch after successful claim
+  useEffect(() => {
+    if (claimSuccess) {
+      refetchBalance();
+      refetchPending();
+      refetchPOICount();
+    }
+  }, [claimSuccess, refetchBalance, refetchPending, refetchPOICount]);
 
+  // Animate progress ring
   useEffect(() => {
     setProgress(0);
-    const t = setTimeout(() => setProgress(Math.round((activeCity.unlocked / activeCity.total) * 100)), 100);
+    const t = setTimeout(() => setProgress(cannesProgress), 100);
     return () => clearTimeout(t);
-  }, [cityIndex, activeCity.unlocked, activeCity.total]);
+  }, [cannesProgress]);
 
-  const balNum    = Number(balance / 10n ** 18n);
-  const truncAddr = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : '0x000...0000';
+  const loading    = balanceLoading || poisLoading;
+  const balNum     = Number(balance / 10n ** 18n);
+  const truncAddr  = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : '0x000...0000';
 
-  const displayBadges: CityBadge[] = badges.length > 0 ? badges : [
-    { cityId: 'cannes', cityName: 'Cannes', completedAt: '2026-04-01T00:00:00Z', poiCount: 12, imageUri: 'https://images.unsplash.com/photo-1533856493584-0c6ca8ca9ce3?w=400&h=400&fit=crop', tokenId: 7640 },
-    { cityId: 'paris',  cityName: 'Paris',  completedAt: '2026-03-15T00:00:00Z', poiCount: 8,  imageUri: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400&h=400&fit=crop', tokenId: 9466 },
-  ];
-
-  const ringR = 56;
+  const ringR    = 56;
   const ringCirc = 2 * Math.PI * ringR;
 
   if (!isConnected) {
@@ -273,17 +341,19 @@ export default function ProfilePage() {
                       <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-black/40" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h1 className="text-xl font-bold text-white truncate">{ensName ?? 'explorer.eth'}</h1>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Wallet className="w-4 h-4 text-[#F5A623]" />
-                        <p className="text-xs text-gray-400 truncate font-mono">{truncAddr}</p>
-                      </div>
+                      <h1 className="text-xl font-bold text-white truncate">{ensName ?? truncAddr}</h1>
+                      {ensName && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <Wallet className="w-4 h-4 text-[#F5A623]" />
+                          <p className="text-xs text-gray-400 truncate font-mono">{truncAddr}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-3 pt-4 border-t border-white/10">
                     {[
                       { label: 'Points', value: loading ? '…' : balNum.toLocaleString(), amber: true,  border: false },
-                      { label: 'POIs',   value: MOCK_POIS.length,                        amber: false, border: true },
+                      { label: 'POIs',   value: loading ? '…' : cannesUnlocked,          amber: false, border: true },
                       { label: 'Badges', value: loading ? '…' : displayBadges.length,   amber: false, border: false },
                     ].map(({ label, value, amber, border }) => (
                       <div key={label} className={`text-center ${border ? 'border-x border-white/10' : ''}`}>
@@ -299,32 +369,59 @@ export default function ProfilePage() {
             {/* ── POINTS ── */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }}
               whileHover={{ scale: 1.02, y: -2 }}
-              className="lg:col-span-4">
+              className="lg:col-span-4 h-[350px]">
               <Card className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-[0_0_30px_rgba(245,166,35,0.15)] hover:shadow-[0_0_50px_rgba(245,166,35,0.3)] transition-shadow duration-300 relative h-full">
                 <div className="absolute inset-0 bg-gradient-to-br from-[#F5A623]/5 to-transparent pointer-events-none" />
                 <CardContent className="p-6 space-y-6 relative z-10 h-full flex flex-col">
                   <div className="flex items-center justify-between">
                     <h2 className="text-sm font-medium text-gray-400">Total Points</h2>
-                    <div className="flex items-center gap-1.5 text-xs text-green-400 font-semibold">
-                      <TrendingUp className="w-3.5 h-3.5" /><span>+2.0%</span>
-                    </div>
+                    {pendingNum > 0 && (
+                      <div className="flex items-center gap-1.5 text-xs text-green-400 font-semibold">
+                        <TrendingUp className="w-3.5 h-3.5" /><span>+{pendingNum} ready</span>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-1 flex-1 flex flex-col justify-center">
                     <div className="text-5xl font-black text-white tracking-tight">
                       {loading ? '—' : balNum.toLocaleString()}
                     </div>
-                    <p className="text-sm text-gray-500">Secured on blockchain</p>
+                    
                   </div>
-                  <div className="flex items-center gap-3 pt-4 border-t border-white/10">
-                    <div className="flex-1">
-                      <div className="text-xs text-gray-500 mb-1">This Week</div>
-                      <div className="text-lg font-bold text-green-400">+250</div>
+                  <div className="pt-4 border-t border-white/10 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">Claimable</div>
+                        <div className={`text-lg font-bold ${pendingNum > 0 ? 'text-green-400' : 'text-white/60'}`}>
+                          {loading ? '…' : `+${pendingNum > 0 ? pendingNum : nextClaimAmount} ROAM`}
+                        </div>
+                      </div>
+                      <button
+                        onClick={claimDailyPoints}
+                        disabled={pendingNum === 0 || onChainPOICount === 0 || isClaiming || isClaimConfirming}
+                        className="px-4 py-2 rounded-xl text-sm font-semibold min-h-[44px] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
+                        style={{
+                          background: pendingNum > 0 && onChainPOICount > 0 ? 'linear-gradient(135deg,#F5A623,#ffd700)' : 'rgba(255,255,255,0.07)',
+                          color: pendingNum > 0 && onChainPOICount > 0 ? '#0A0A0F' : 'rgba(255,255,255,0.3)',
+                        }}
+                      >
+                        {isClaiming || isClaimConfirming ? (
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            Claiming…
+                          </span>
+                        ) : pendingNum > 0 ? 'Claim' : 'Claimed'}
+                      </button>
                     </div>
-                    <div className="h-10 w-px bg-white/10" />
-                    <div className="flex-1">
-                      <div className="text-xs text-gray-500 mb-1">Rank</div>
-                      <div className="text-lg font-bold text-[#F5A623]">#127</div>
-                    </div>
+                    {cannesUnlocked > 0 && onChainPOICount === 0 && (
+                      <p className="text-xs text-yellow-500/70">
+                        Waiting for agent to confirm POI delivery
+                      </p>
+                    )}
+                    {pendingNum === 0 && onChainPOICount > 0 && msUntilClaim > 0 && (
+                      <p className="text-xs text-white/30">
+                        Next in {hoursUntilClaim}h {minsUntilClaim}m
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -333,7 +430,7 @@ export default function ProfilePage() {
             {/* ── PROGRESS RING ── */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }}
               whileHover={{ scale: 1.02, y: -2 }}
-              className="lg:col-span-4">
+              className="lg:col-span-4 h-[350px]">
               <Card className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-[0_0_30px_rgba(245,166,35,0.15)] hover:shadow-[0_0_50px_rgba(245,166,35,0.3)] transition-shadow duration-300 h-full">
                 <CardContent className="p-5 h-full flex flex-col gap-4">
                   {/* Header with city nav */}
@@ -341,62 +438,31 @@ export default function ProfilePage() {
                     <h2 className="text-sm font-semibold text-white flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-[#F5A623]" />City Progress
                     </h2>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setCityIndex(i => (i - 1 + MOCK_CITIES.length) % MOCK_CITIES.length)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/10 active:bg-white/20"
-                      >
-                        <ChevronLeft className="w-4 h-4 text-gray-400" />
-                      </button>
-                      <button
-                        onClick={() => setCityIndex(i => (i + 1) % MOCK_CITIES.length)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/10 active:bg-white/20"
-                      >
-                        <ChevronRight className="w-4 h-4 text-gray-400" />
-                      </button>
-                    </div>
+                    <div className="flex items-center gap-1" />
                   </div>
 
                   {/* Ring */}
-                  <AnimatePresence mode="wait">
-                    <motion.div key={cityIndex}
-                      initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
-                      transition={{ duration: 0.25 }}
-                      className="flex flex-col items-center flex-1 justify-center"
-                    >
-                      <div className="relative w-32 h-32">
-                        <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 128 128">
-                          <circle cx="64" cy="64" r={ringR} stroke="rgba(255,255,255,0.08)" strokeWidth="8" fill="none" />
-                          <circle cx="64" cy="64" r={ringR}
-                            stroke={activeCity.color} strokeWidth="8" fill="none"
-                            strokeDasharray={ringCirc}
-                            strokeDashoffset={ringCirc * (1 - progress / 100)}
-                            strokeLinecap="round"
-                            style={{ transition: 'stroke-dashoffset 0.9s ease-out' }}
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                          <div className="text-3xl font-bold text-white">{progress}%</div>
-                          <div className="text-xs text-gray-400 mt-1">Complete</div>
-                        </div>
+                  <div className="flex flex-col items-center flex-1 justify-center">
+                    <div className="relative w-32 h-32">
+                      <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 128 128">
+                        <circle cx="64" cy="64" r={ringR} stroke="rgba(255,255,255,0.08)" strokeWidth="8" fill="none" />
+                        <circle cx="64" cy="64" r={ringR}
+                          stroke="#f093fb" strokeWidth="8" fill="none"
+                          strokeDasharray={ringCirc}
+                          strokeDashoffset={ringCirc * (1 - progress / 100)}
+                          strokeLinecap="round"
+                          style={{ transition: 'stroke-dashoffset 0.9s ease-out' }}
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <div className="text-3xl font-bold text-white">{progress}%</div>
+                        <div className="text-xs text-gray-400 mt-1">Complete</div>
                       </div>
-
-                      <p className="mt-3 text-base font-bold text-white">{activeCity.name}</p>
-                      <p className="text-sm text-gray-400">
-                        <span className="text-white font-semibold">{activeCity.unlocked}</span> / {activeCity.total} POIs
-                      </p>
-                    </motion.div>
-                  </AnimatePresence>
-
-                  {/* Dot indicators */}
-                  <div className="flex justify-center gap-1.5">
-                    {MOCK_CITIES.map((c, i) => (
-                      <button key={c.id} onClick={() => setCityIndex(i)}
-                        className="w-1.5 h-1.5 rounded-full transition-all duration-300"
-                        style={{ background: i === cityIndex ? activeCity.color : 'rgba(255,255,255,0.2)',
-                                 transform: i === cityIndex ? 'scale(1.4)' : 'scale(1)' }}
-                      />
-                    ))}
+                    </div>
+                    <p className="mt-3 text-base font-bold text-white">Cannes</p>
+                    <p className="text-sm text-gray-400">
+                      <span className="text-white font-semibold">{cannesUnlocked}</span> / {TOTAL_CANNES_POIS} POIs
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -405,35 +471,36 @@ export default function ProfilePage() {
             {/* ── LOCATIONS ── */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.3 }}
               whileHover={{ scale: 1.02, y: -2 }}
-              className="lg:col-span-4">
+              className="lg:col-span-4 h-[350px]">
               <Card className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-[0_0_30px_rgba(245,166,35,0.15)] hover:shadow-[0_0_50px_rgba(245,166,35,0.3)] transition-shadow duration-300 h-full">
                 <CardContent className="p-5 space-y-3 h-full flex flex-col">
                   <h2 className="text-sm font-semibold text-white flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-[#F5A623]" />Unlocked Locations
                   </h2>
-                  <div className="flex-1 space-y-2">
-                    {MOCK_POIS.map((poi, i) => (
-                      <motion.a key={poi.id} href={`/experience/${poi.id}`}
+                  <div className="flex-1 min-h-0 space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent pr-1">
+                    {loading && (
+                      <p className="text-xs text-white/40 text-center py-4">Loading…</p>
+                    )}
+                    {!loading && ownedPOIs.length === 0 && (
+                      <p className="text-xs text-white/40 text-center py-4">No locations unlocked yet</p>
+                    )}
+                    {ownedPOIs.map((poi, i) => (
+                      <motion.a key={poi.id} href={`/experience/${poi.id}?unlocked=1`}
                         initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.35, delay: 0.4 + i * 0.08 }}
                         className="group flex items-center gap-3 p-3 rounded-2xl min-h-[60px] transition-all duration-200 hover:scale-[1.01]"
                         style={{ background: 'rgba(255,255,255,0.04)' }}
                       >
-                        {/* Number badge */}
                         <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
                           style={{ background: 'linear-gradient(135deg, rgba(245,166,35,0.6), rgba(255, 0, 255, 0.6))' }}>
                           {String(i + 1).padStart(2, '0')}
                         </div>
-
-                        {/* Text */}
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-semibold text-white truncate group-hover:text-[#F5A623] transition-colors">
                             {poi.name}
                           </div>
-                          <div className="text-xs text-gray-500 mt-0.5">{poi.discovered}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">Cannes</div>
                         </div>
-
-                        {/* Arrow */}
                         <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                           style={{ background: 'rgba(245,166,35,0.15)' }}>
                           <svg className="w-3 h-3 text-[#F5A623]" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -12,10 +12,18 @@
     "build": "turbo build",
     "test": "turbo test",
     "lint": "turbo lint",
-    "swarm": "concurrently --kill-others-on-fail --prefix-colors \"bgMagenta,bgCyan,bgGreen,bgYellow\" --names \"ORCH,LORE,SCOUT,GUIDE\" \"cd agents/orchestrator && npm run dev\" \"cd agents/lore && npm run dev\" \"cd agents/scout && npm run dev\" \"cd agents/guide && npm run dev\""
+    "swarm": "concurrently --kill-others-on-fail --prefix-colors \"bgMagenta,bgCyan,bgGreen,bgYellow\" --names \"ORCH,LORE,SCOUT,GUIDE\" \"cd agents/orchestrator && npm run dev\" \"cd agents/lore && npm run dev\" \"cd agents/scout && npm run dev\" \"cd agents/guide && npm run dev\"",
+    "cache:clear": "rm -rf apps/web/.next .turbo",
+    "deploy:fresh": "npm run cache:clear && npm run deploy:fresh --workspace=contracts"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
     "turbo": "^2.0.0"
+  },
+  "optionalDependencies": {
+    "@esbuild/darwin-arm64": "^0.28.0"
+  },
+  "dependencies": {
+    "prop-types": "^15.8.1"
   }
 }

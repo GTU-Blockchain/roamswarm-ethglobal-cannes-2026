@@ -16,6 +16,9 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 const app = express();
 app.use(express.json());
 
+// Memory Cache for Hackathon
+const audioCache = new Map<string, { audioUrl: string, storage: string, size: number }>();
+
 const IDENTITY = {
   name: 'Guide Agent',
   ens: 'guide.roamswarm.eth',
@@ -73,7 +76,7 @@ async function textToSpeech(text: string): Promise<Buffer> {
   return Buffer.from(arrayBuffer);
 }
 
-async function uploadTo0GStorage(audioBuffer: Buffer, poiId: string): Promise<string> {
+async function uploadTo0GStorage(audioBuffer: Buffer, _poiId: string): Promise<string> {
   const privateKey = process.env.PRIVATE_KEY;
   const rpcUrl = process.env.OG_RPC_URL || 'https://evmrpc-testnet.0g.ai';
   const indexerUrl = process.env.OG_STORAGE_INDEXER || 'https://indexer-storage-testnet-turbo.0g.ai';
@@ -84,20 +87,23 @@ async function uploadTo0GStorage(audioBuffer: Buffer, poiId: string): Promise<st
   const wallet = new ethers.Wallet(privateKey, provider);
   const indexer = new Indexer(indexerUrl);
 
-  // Use MemData — no disk write needed
   const memData = new MemData(audioBuffer);
 
   const [tree, treeErr] = await memData.merkleTree();
   if (treeErr !== null) throw new Error(`Merkle tree error: ${treeErr}`);
 
   const rootHash = tree!.rootHash();
+  const audioUrl = `${indexerUrl}/file?root=${rootHash}`;
   console.log('[Guide] 0G root hash:', rootHash);
 
-  const [, uploadErr] = await indexer.upload(memData, rpcUrl, wallet);
-  if (uploadErr !== null) throw new Error(`0G upload error: ${uploadErr}`);
+  // Start upload but don't wait for finalization — return URL immediately
+  // 0G finalization can take minutes; file is accessible once segments are uploaded
+  indexer.upload(memData, rpcUrl, wallet).then(([, err]) => {
+    if (err) console.warn('[Guide] 0G upload background error:', err);
+    else console.log('[Guide] 0G upload finalized:', audioUrl);
+  }).catch((e: unknown) => console.warn('[Guide] 0G upload exception:', e));
 
-  const audioUrl = `${indexerUrl}/file?root=${rootHash}`;
-  console.log('[Guide] Uploaded to 0G Storage:', audioUrl);
+  console.log('[Guide] Returning URL immediately (upload in background):', audioUrl);
   return audioUrl;
 }
 
@@ -115,26 +121,35 @@ app.post('/synthesize', async (req, res) => {
     return;
   }
 
+  const cacheKey = `${poiId}-${lang}`;
+  if (audioCache.has(cacheKey)) {
+    console.log(`[Guide] Serving generated audio from memory cache for ${cacheKey}`);
+    const cachedData = audioCache.get(cacheKey);
+    res.json({ ...cachedData, poiId, lang });
+    return;
+  }
+
   try {
     // Step 1: TTS
     console.log('[Guide] Generating TTS for:', poiId);
     const audioBuffer = await textToSpeech(story);
     console.log('[Guide] TTS complete, size:', audioBuffer.length, 'bytes');
 
-    // Step 2: Upload to 0G Storage
-    let audioUrl: string;
-    let storage: string;
+    // Step 2: Return base64 immediately so the browser can play right away,
+    // then upload to 0G Storage in the background for permanent decentralized storage.
+    // (0G finalization takes minutes; returning the URL before upload completes causes
+    //  "no supported sources" errors because the file isn't accessible yet.)
+    const audioUrl = `data:audio/mpeg;base64,${audioBuffer.toString('base64')}`;
+    const storage = 'base64-inline';
 
-    try {
-      audioUrl = await uploadTo0GStorage(audioBuffer, poiId);
-      storage = '0g-storage';
-    } catch (storageErr) {
-      // Fallback: return audio as base64 if 0G Storage fails
-      const errMsg = storageErr instanceof Error ? storageErr.message : String(storageErr);
-      console.warn('[Guide] 0G Storage failed, using base64 fallback:', errMsg);
-      audioUrl = `data:audio/mpeg;base64,${audioBuffer.toString('base64')}`;
-      storage = 'base64-fallback';
-    }
+    uploadTo0GStorage(audioBuffer, poiId).then((ogUrl) => {
+      console.log('[Guide] 0G Storage finalized:', ogUrl);
+    }).catch((e: unknown) => {
+      console.warn('[Guide] 0G Storage background upload failed:', e);
+    });
+
+    // Save to Cache
+    audioCache.set(cacheKey, { audioUrl, storage, size: audioBuffer.length });
 
     res.json({ audioUrl, storage, size: audioBuffer.length, poiId, lang });
   } catch (err: unknown) {

@@ -6,9 +6,13 @@ import * as path from 'path';
 // https://docs.worldcoin.org/reference/address-book
 const WORLD_ID_SEPOLIA = '0x469449f251692e0779667583026b5a1e99512157';
 
-// externalNullifier = hash of app_id + action
-const EXTERNAL_NULLIFIER = BigInt(
-  ethers.keccak256(ethers.toUtf8Bytes('app_roam_swarm_register_contributor'))
+// External nullifier — matches IDKit: hashToField(packed(hashToField(appId), hashToField(action)))
+// where hashToField(x) = keccak256(utf8(x)) >> 8  for strings
+const _hf = (b: Uint8Array) => BigInt(ethers.keccak256(b)) >> 8n;
+const _h1 = _hf(ethers.toUtf8Bytes('app_64cc7693dcddbd90361336d0ef091ea6'));
+const _h2 = _hf(ethers.toUtf8Bytes('register_contributor'));
+const EXTERNAL_NULLIFIER = _hf(
+  ethers.getBytes(ethers.solidityPacked(['uint256', 'uint256'], [_h1, _h2]))
 );
 
 async function main() {

@@ -22,6 +22,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'Roam Swarm',
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
 };
 
 export default function RootLayout({

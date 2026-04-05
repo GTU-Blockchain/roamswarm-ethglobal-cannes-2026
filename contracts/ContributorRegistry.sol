@@ -18,8 +18,6 @@ interface IENSSubnameRegistry {
 
 /// @title ContributorRegistry
 /// @notice Stores World ID 4.0 verified contributors + their ENS subnames.
-///         On successful registration, automatically grants an ENS subname
-///         via ENSSubnameRegistry (if wired up).
 contract ContributorRegistry {
     IWorldID public immutable worldId;
     uint256 public immutable groupId = 1; // Orb-verified
@@ -31,7 +29,7 @@ contract ContributorRegistry {
 
     mapping(address => bool) public verified;
     mapping(address => string) public ensName;
-    mapping(uint256 => bool) public nullifierUsed; // prevent double-registration
+    mapping(uint256 => bool) public nullifierUsed;
 
     event ContributorRegistered(address indexed contributor, string ensSubname);
     event ENSSubnameRegistrySet(address indexed registry);
@@ -47,19 +45,17 @@ contract ContributorRegistry {
         owner = msg.sender;
     }
 
-    /// @notice Wire up ENSSubnameRegistry so contributors auto-receive subnames on register.
-    ///         ENSSubnameRegistry must have this contract set as authorized caller first.
     function setENSSubnameRegistry(address _registry) external onlyOwner {
         ensSubnameRegistry = _registry;
         emit ENSSubnameRegistrySet(_registry);
     }
 
-    /// @notice Register as a verified contributor via World ID ZK proof
-    /// @param signal       The user's wallet address (as uint256)
-    /// @param root         The Merkle root of the World ID tree
-    /// @param nullifierHash Unique hash preventing double-registration
-    /// @param proof        The ZK proof
-    /// @param ensSubname   Desired ENS subname (e.g. "alice")
+    /// @notice Register as a verified contributor via World ID ZK proof.
+    /// @param signal        Wallet address (must equal msg.sender)
+    /// @param root          World ID Merkle root
+    /// @param nullifierHash Unique nullifier — prevents double-registration
+    /// @param proof         ZK proof from IDKit
+    /// @param ensSubname    Desired ENS subname (e.g. "alice")
     function register(
         address signal,
         uint256 root,
@@ -72,10 +68,14 @@ contract ContributorRegistry {
         require(signal == msg.sender, "Signal mismatch");
         require(bytes(ensSubname).length > 0, "Empty subname");
 
+        // Signal hash: keccak256(abi.encodePacked(address)) >> 8
+        // Matches IDKit: address "0x..." is Hex-validated → hashed as raw 20 bytes → >> 8
+        uint256 signalHash = uint256(keccak256(abi.encodePacked(signal))) >> 8;
+
         worldId.verifyProof(
             root,
             groupId,
-            uint256(keccak256(abi.encodePacked(signal))),
+            signalHash,
             nullifierHash,
             externalNullifier,
             proof
@@ -87,8 +87,6 @@ contract ContributorRegistry {
 
         emit ContributorRegistered(msg.sender, ensSubname);
 
-        // Auto-grant ENS subname if registry is wired up.
-        // Failure is non-blocking — contributor is still registered on-chain.
         if (ensSubnameRegistry != address(0)) {
             try IENSSubnameRegistry(ensSubnameRegistry).registerSubname(ensSubname, msg.sender) {}
             catch {}
